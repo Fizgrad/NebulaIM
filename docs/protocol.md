@@ -47,6 +47,8 @@ Do not directly send or parse the struct memory layout. `encodeHeader` and `deco
 UNKNOWN = 0
 LOGIN_REQ = 1001
 LOGIN_RESP = 1002
+REGISTER_REQ = 1003
+REGISTER_RESP = 1004
 HEARTBEAT_REQ = 1101
 HEARTBEAT_RESP = 1102
 SEND_SINGLE_MSG_REQ = 2001

@@ -6,12 +6,14 @@ Gateway owns client TCP/WebSocket long connections and exposes GatewayService fo
 
 - TCP accept, WebSocket handshake/frame handling, and connection lifecycle.
 - PacketCodec sticky/partial packet decoding.
-- Login forwarding to UserService through the RPC executor.
+- Register/Login forwarding to UserService through the RPC executor.
 - Message/ACK/offline pull/read/recall forwarding to MessageService through the RPC executor.
 - Redis online state write/refresh/delete.
 - GatewayService.DeliverToConnection writes PUSH_MSG to the real TcpConnection, wrapping it in a WebSocket binary frame when the client connection is WebSocket.
 
 ## Flow
+
+Register: client sends REGISTER_REQ -> Gateway submits UserService.Register to RpcExecutor -> callback returns REGISTER_RESP. Register does not authenticate the connection.
 
 Login: client sends LOGIN_REQ -> Gateway submits UserService.Login to RpcExecutor -> callback returns to the connection EventLoop -> bind user_id/device_id to connection_id -> write Redis online keys -> return LOGIN_RESP.
 

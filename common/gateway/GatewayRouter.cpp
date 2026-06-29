@@ -38,6 +38,7 @@ GatewayRouter::GatewayRouter(ConnectionManager* connection_manager,
 void GatewayRouter::handlePacket(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet) {
     if (connection_manager_) connection_manager_->updateActiveTime(connection_id);
     switch (packet.type) {
+        case MessageType::REGISTER_REQ: handleRegister(conn, connection_id, packet); break;
         case MessageType::LOGIN_REQ: handleLogin(conn, connection_id, packet); break;
         case MessageType::HEARTBEAT_REQ: handleHeartbeat(conn, connection_id, packet); break;
         case MessageType::SEND_SINGLE_MSG_REQ: handleSendSingleMessage(conn, connection_id, packet); break;
@@ -77,6 +78,71 @@ bool GatewayRouter::requireAuth(const TcpConnectionPtr& conn, const std::string&
     }
     *context = ctx;
     return true;
+}
+
+void GatewayRouter::handleRegister(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet) {
+    (void)connection_id;
+    proto::RegisterRequest req;
+    if (!GatewayPacketHelper::parseBody(packet, &req)) {
+        sendError(conn, packet.sequence_id, static_cast<int>(ErrorCode::GATEWAY_INVALID_PACKET), "bad register body", "");
+        return;
+    }
+    if (!rate_limiter_.allowLogin(conn ? conn->peerAddress().toIp() : "")) {
+        sendError(conn, packet.sequence_id, static_cast<int>(ErrorCode::RATE_LIMITED), "register rate limited", req.request_id());
+        return;
+    }
+    if (!circuit_breakers_.allowRequest("user_service")) {
+        sendError(conn, packet.sequence_id, static_cast<int>(ErrorCode::CIRCUIT_OPEN), "user service circuit open", req.request_id());
+        return;
+    }
+    TraceContext::ensureTraceId(req.request_id());
+    if (rpc_executor_ != nullptr) {
+        struct RegisterResult {
+            proto::RegisterResponse resp;
+        };
+        uint32_t sequence_id = packet.sequence_id;
+        rpc_executor_->submit(conn->getLoop(),
+            [this, req]() mutable {
+                RegisterResult result;
+                grpc::ClientContext ctx;
+                setDeadline(&ctx);
+                RpcMetadata::injectTraceId(&ctx, TraceContext::ensureTraceId(req.request_id()));
+                grpc::Status status = backend_clients_->userService()->Register(&ctx, req, &result.resp);
+                if (!status.ok()) {
+                    circuit_breakers_.recordFailure("user_service");
+                    result.resp.mutable_response()->set_code(static_cast<int>(ErrorCode::GATEWAY_BACKEND_RPC_FAILED));
+                    result.resp.mutable_response()->set_message(status.error_message());
+                    result.resp.mutable_response()->set_request_id(req.request_id());
+                } else {
+                    circuit_breakers_.recordSuccess("user_service");
+                }
+                return result;
+            },
+            [this, connection_id, sequence_id, request_id = req.request_id()](RegisterResult result, std::exception_ptr error) mutable {
+                auto live_conn = connection_manager_->getConnection(connection_id);
+                if (!live_conn || !live_conn->connected()) return;
+                if (error) {
+                    sendError(live_conn, sequence_id, static_cast<int>(ErrorCode::GATEWAY_BACKEND_RPC_FAILED), "backend rpc exception", request_id);
+                    return;
+                }
+                sendPacket(live_conn, GatewayPacketHelper::makeResponse(MessageType::REGISTER_RESP, sequence_id, result.resp));
+            });
+        return;
+    }
+    proto::RegisterResponse resp;
+    grpc::ClientContext ctx;
+    setDeadline(&ctx);
+    RpcMetadata::injectTraceId(&ctx, TraceContext::ensureTraceId(req.request_id()));
+    grpc::Status status = backend_clients_->userService()->Register(&ctx, req, &resp);
+    if (status.ok()) {
+        circuit_breakers_.recordSuccess("user_service");
+    } else {
+        circuit_breakers_.recordFailure("user_service");
+        resp.mutable_response()->set_code(static_cast<int>(ErrorCode::GATEWAY_BACKEND_RPC_FAILED));
+        resp.mutable_response()->set_message(status.error_message());
+        resp.mutable_response()->set_request_id(req.request_id());
+    }
+    sendPacket(conn, GatewayPacketHelper::makeResponse(MessageType::REGISTER_RESP, packet.sequence_id, resp));
 }
 
 void GatewayRouter::handleLogin(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet) {

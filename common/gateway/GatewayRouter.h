@@ -33,6 +33,7 @@ private:
     void sendError(const TcpConnectionPtr& conn, uint32_t sequence_id, int code, const std::string& message, const std::string& request_id);
     bool requireAuth(const TcpConnectionPtr& conn, const std::string& connection_id, uint32_t sequence_id, std::optional<ConnectionContext>* context);
 
+    void handleRegister(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet);
     void handleLogin(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet);
     void handleHeartbeat(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet);
     void handleSendSingleMessage(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet);
