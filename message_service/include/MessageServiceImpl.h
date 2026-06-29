@@ -15,7 +15,11 @@ public:
                        KafkaProducer* kafka_producer,
                        MessageIdGenerator* message_id_generator,
                        MessageDeduplicator* message_deduplicator,
-                       MessageServiceOptions options);
+                       MessageServiceOptions options,
+                       MySqlConnectionPool* mysql_pool = nullptr,
+                       ConversationDao* conversation_dao = nullptr,
+                       MessageReceiptDao* message_receipt_dao = nullptr,
+                       OutboxDao* outbox_dao = nullptr);
 
     grpc::Status SendSingleMessage(grpc::ServerContext* context,
                                    const proto::SendSingleMessageRequest* request,
@@ -33,6 +37,22 @@ public:
                                      const proto::PullOfflineMessagesRequest* request,
                                      proto::PullOfflineMessagesResponse* response) override;
 
+    grpc::Status MarkMessageRead(grpc::ServerContext* context,
+                                 const proto::MarkMessageReadRequest* request,
+                                 proto::CommonResponse* response) override;
+
+    grpc::Status MarkConversationRead(grpc::ServerContext* context,
+                                      const proto::MarkConversationReadRequest* request,
+                                      proto::CommonResponse* response) override;
+
+    grpc::Status GetMessageReadState(grpc::ServerContext* context,
+                                     const proto::GetMessageReadStateRequest* request,
+                                     proto::GetMessageReadStateResponse* response) override;
+
+    grpc::Status RecallMessage(grpc::ServerContext* context,
+                               const proto::RecallMessageRequest* request,
+                               proto::RecallMessageResponse* response) override;
+
 private:
     bool invalidDeps() const;
     bool validateContent(const std::string& request_id, const std::string& content, proto::CommonResponse* response) const;
@@ -46,6 +66,10 @@ private:
     KafkaProducer* kafka_producer_;
     MessageIdGenerator* message_id_generator_;
     MessageDeduplicator* message_deduplicator_;
+    MySqlConnectionPool* mysql_pool_;
+    ConversationDao* conversation_dao_;
+    MessageReceiptDao* message_receipt_dao_;
+    OutboxDao* outbox_dao_;
     MessageServiceOptions options_;
 };
 

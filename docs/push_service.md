@@ -4,7 +4,7 @@ PushService consumes Kafka message topics, checks Redis online status, calls Gat
 
 ## Boundaries
 
-MessageService persists and publishes messages. PushService delivers or stores offline messages. Gateway owns client TCP connections and later performs real writes to clients.
+MessageService persists messages and records Kafka publication intent through Outbox. PushService consumes published events, delivers or stores offline messages, and Gateway owns client TCP/WebSocket connections.
 
 ## Flow
 
@@ -17,11 +17,16 @@ Retry: consume `nebula.message.retry`, retry user/group delivery. Exceeding max 
 ## Redis online status
 
 ```text
-nebula:user:online:{user_id} -> gateway_id
-nebula:user:conn:{user_id} -> connection_id
+nebula:user:devices:{user_id} -> set(device_id)
+nebula:user:online:{user_id}:{device_id} -> gateway_id
+nebula:user:conn:{user_id}:{device_id} -> connection_id
 ```
 
-Missing key means offline. TTL will be refreshed by Gateway heartbeat in a later phase.
+Missing device keys mean that device is offline. Gateway refreshes TTL on heartbeat and removes the current device mapping on close/logout.
+
+PushService defaults to all online devices for a user. Directed push can target a specific `device_id` when the caller supplies one.
+
+The older single-device helper methods remain in code for local tests and migration helpers, but production online state should use the multi-device keys above.
 
 ## Retry and DLQ
 
@@ -36,15 +41,14 @@ Failure below max retry writes retry topic. Failure over max retry writes DLQ an
 ## Run
 
 ```bash
-cd deploy
-docker compose up -d
-docker compose ps
-bash kafka/topics.sh
+./scripts/start_deps.sh
+./scripts/migrate_db.sh
+./scripts/init_topics.sh
 ```
 
 ```bash
-./build/gateway/nebula_gateway --config ../config/nebula.conf
-./build/push_service/nebula_push_service --config ../config/nebula.conf
+./build/gateway/nebula_gateway --config config/nebula.conf
+./build/push_service/nebula_push_service --config config/nebula.conf
 ./build/examples/push_service_client --addr 127.0.0.1:50054
 ./build/examples/push_kafka_produce_demo
 ```
@@ -64,7 +68,7 @@ bash kafka/topics.sh
 
 1. PushService consumes Kafka to decouple message acceptance from delivery.
 2. MessageService should not directly push because delivery is slow and fanout-heavy.
-3. Redis online keys map user to gateway and connection.
+3. Redis online keys map user and device to gateway and connection.
 4. TTL cleans stale online status after gateway crash.
 5. GatewayClientManager maps gateway_id to RPC clients.
 6. Retry topic handles transient failures; DLQ captures terminal failures.

@@ -13,6 +13,7 @@ bool GatewayContext::init(const std::string& config_path) {
     options_.tcp_host = config_.getString("gateway.tcp.host", options_.tcp_host);
     options_.tcp_port = config_.getInt("gateway.tcp.port", options_.tcp_port);
     options_.tcp_worker_threads = config_.getInt("gateway.tcp.worker_threads", options_.tcp_worker_threads);
+    options_.rpc_worker_threads = config_.getInt("gateway.rpc_worker_threads", options_.rpc_worker_threads);
     options_.rpc_host = config_.getString("gateway.rpc.host", options_.rpc_host);
     options_.rpc_port = config_.getInt("gateway.rpc.port", options_.rpc_port);
     options_.heartbeat_timeout_ms = config_.getInt("gateway.heartbeat_timeout_ms", options_.heartbeat_timeout_ms);
@@ -21,6 +22,7 @@ bool GatewayContext::init(const std::string& config_path) {
     options_.message_service_addr = config_.getString("message_service.addr", options_.message_service_addr);
     options_.relation_service_addr = config_.getString("relation_service.addr", options_.relation_service_addr);
     options_.push_service_addr = config_.getString("push_service.addr", options_.push_service_addr);
+    grpc_tls_config_ = GrpcTlsCredentials::fromConfig(config_);
 
     auto redis = std::make_unique<RedisClient>();
     RedisConfig redis_config;
@@ -34,9 +36,13 @@ bool GatewayContext::init(const std::string& config_path) {
     connection_manager_ = std::make_unique<ConnectionManager>(options_.gateway_id);
     online_manager_ = std::make_unique<GatewayOnlineManager>(redis_client_.get(), options_.gateway_id, options_.online_ttl_seconds);
     backend_clients_ = std::make_unique<GatewayBackendClients>();
-    if (!backend_clients_->init(options_.user_service_addr, options_.message_service_addr, options_.relation_service_addr, options_.push_service_addr)) return false;
+    service_resolver_ = std::make_unique<StaticServiceResolver>();
+    service_resolver_->loadFromConfig(config_);
+    if (!backend_clients_->init(*service_resolver_, grpc_tls_config_)) return false;
     codec_ = std::make_unique<PacketCodec>();
-    router_ = std::make_unique<GatewayRouter>(connection_manager_.get(), online_manager_.get(), backend_clients_.get(), codec_.get());
+    rpc_executor_ = std::make_unique<RpcExecutor>(static_cast<size_t>(options_.rpc_worker_threads));
+    rpc_executor_->start();
+    router_ = std::make_unique<GatewayRouter>(connection_manager_.get(), online_manager_.get(), backend_clients_.get(), codec_.get(), nullptr, rpc_executor_.get());
     return true;
 }
 
@@ -50,5 +56,6 @@ PacketCodec* GatewayContext::codec() { return codec_.get(); }
 std::string GatewayContext::tcpListenIp() const { return options_.tcp_host; }
 int GatewayContext::tcpListenPort() const { return options_.tcp_port; }
 std::string GatewayContext::rpcListenAddress() const { return options_.rpc_host + ":" + std::to_string(options_.rpc_port); }
+const GrpcTlsConfig& GatewayContext::grpcTlsConfig() const { return grpc_tls_config_; }
 
 }  // namespace nebula

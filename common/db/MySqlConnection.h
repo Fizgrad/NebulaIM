@@ -32,6 +32,7 @@ public:
     std::unique_ptr<MySqlResult> executeQuery(const std::string& sql);
 
     uint64_t lastInsertId() const;
+    uint64_t affectedRows() const;
 
     bool beginTransaction();
     bool commit();

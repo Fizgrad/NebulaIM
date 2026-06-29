@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package nebula.proto;
+
+import "common.proto";
+
+service AdminService {
+  rpc RunCleanup(RunCleanupRequest) returns (RunCleanupResponse);
+  rpc GetSystemStats(GetSystemStatsRequest) returns (GetSystemStatsResponse);
+  rpc GetOutboxStats(GetOutboxStatsRequest) returns (GetOutboxStatsResponse);
+  rpc GetKafkaLagInfo(GetKafkaLagInfoRequest) returns (GetKafkaLagInfoResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message RunCleanupRequest {
+  string request_id = 1;
+  bool dry_run = 2;
+}
+
+message RunCleanupResponse {
+  CommonResponse response = 1;
+  uint64 cleaned_rows = 2;
+}
+
+message GetSystemStatsRequest {
+  string request_id = 1;
+}
+
+message GetSystemStatsResponse {
+  CommonResponse response = 1;
+  uint64 online_users = 2;
+  uint64 active_connections = 3;
+}
+
+message GetOutboxStatsRequest {
+  string request_id = 1;
+}
+
+message GetOutboxStatsResponse {
+  CommonResponse response = 1;
+  uint64 pending = 2;
+  uint64 published = 3;
+  uint64 failed = 4;
+  uint64 dead = 5;
+}
+
+message GetKafkaLagInfoRequest {
+  string request_id = 1;
+}
+
+message KafkaLagInfo {
+  string topic = 1;
+  string consumer_group = 2;
+  int64 lag = 3;
+}
+
+message GetKafkaLagInfoResponse {
+  CommonResponse response = 1;
+  repeated KafkaLagInfo lags = 2;
+}
+
+message HealthCheckRequest {
+  string request_id = 1;
+}
+
+message DependencyHealth {
+  string name = 1;
+  string state = 2;
+  string detail = 3;
+}
+
+message HealthCheckResponse {
+  CommonResponse response = 1;
+  string state = 2;
+  repeated DependencyHealth dependencies = 3;
+}

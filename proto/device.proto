@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package nebula.proto;
+
+import "common.proto";
+
+service DeviceService {
+  rpc ListDevices(ListDevicesRequest) returns (ListDevicesResponse);
+  rpc KickDevice(KickDeviceRequest) returns (CommonResponse);
+  rpc KickAllDevices(KickAllDevicesRequest) returns (CommonResponse);
+}
+
+message DeviceInfo {
+  uint64 user_id = 1;
+  string device_id = 2;
+  string platform = 3;
+  string device_name = 4;
+  int64 last_login_at = 5;
+  int64 last_active_at = 6;
+  bool online = 7;
+}
+
+message ListDevicesRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+}
+
+message ListDevicesResponse {
+  CommonResponse response = 1;
+  repeated DeviceInfo devices = 2;
+}
+
+message KickDeviceRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  string device_id = 3;
+}
+
+message KickAllDevicesRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+}

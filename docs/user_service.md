@@ -1,8 +1,8 @@
 # NebulaIM UserService
 
-## Current capability
+## Current Capability
 
-Phase 7 upgrades UserService from mock logic to real MySQL + Redis implementation. It supports Register, Login, ValidateToken, and GetUserInfo.
+UserService is the auth/profile service backed by MySQL and Redis. It supports Register, Login, ValidateToken, GetUserInfo, Logout, and RefreshToken.
 
 ## Flow summary
 
@@ -15,7 +15,7 @@ validate input -> check username -> PBKDF2 hash password -> UserDao create user 
 Login:
 
 ```text
-load user by username -> verify password -> generate random token -> Redis SETEX -> return token
+load user by username -> verify password -> generate random token -> Redis SETEX -> optionally record device metadata -> return token
 ```
 
 ValidateToken:
@@ -28,6 +28,18 @@ GetUserInfo:
 
 ```text
 user_id -> UserDao getUserById -> public UserInfo
+```
+
+Logout:
+
+```text
+token -> Redis DEL nebula:token:{token} -> return CommonResponse
+```
+
+RefreshToken:
+
+```text
+old token -> ValidateToken -> generate new random token -> SETEX new token -> DEL old token
 ```
 
 ## Security notes
@@ -52,13 +64,12 @@ auth.password_min_length=6
 ## Run
 
 ```bash
-cd deploy
-docker compose up -d
-docker compose ps
+./scripts/start_deps.sh
+./scripts/migrate_db.sh
 ```
 
 ```bash
-./build/user_service/nebula_user_service --config ../config/nebula.conf
+./build/user_service/nebula_user_service --config config/nebula.conf
 ./build/examples/user_register_login_client --addr 127.0.0.1:50051
 ```
 
@@ -73,6 +84,8 @@ docker compose ps
 
 `test_user_service_impl` and `test_user_service_integration` require MySQL and Redis.
 
+LoginRequest also accepts `device_id`, `platform`, and `device_name`; Gateway uses these fields for multi-device online state.
+
 ## Interview points
 
 1. Username uniqueness relies on both pre-check and DB unique index.
@@ -84,7 +97,7 @@ docker compose ps
 7. Redis is suitable for token storage because it supports low-latency TTL lookup.
 8. Redis failure during login should fail the login because token persistence failed.
 9. ValidateToken can be optimized with short-lived local cache if Redis is hot.
-10. Multi-device login can store multiple random tokens per user.
+10. Multi-device login can store multiple random tokens per user/device.
 11. Logout deletes the token key.
 12. Kickout deletes token and notifies gateway.
 13. JWT is self-contained but harder to revoke; random token is centrally revocable.

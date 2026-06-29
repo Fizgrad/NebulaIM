@@ -54,6 +54,9 @@ set(PROTO_FILES
     relation.proto
     push.proto
     gateway.proto
+    conversation.proto
+    device.proto
+    admin.proto
 )
 
 set(GENERATED_DIR ${CMAKE_BINARY_DIR}/generated)

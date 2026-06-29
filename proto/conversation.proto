@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package nebula.proto;
+
+import "common.proto";
+
+service ConversationService {
+  rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
+  rpc MarkConversationRead(ConversationMarkReadRequest) returns (CommonResponse);
+  rpc DeleteConversation(ConversationDeleteRequest) returns (CommonResponse);
+  rpc PinConversation(ConversationPinRequest) returns (CommonResponse);
+  rpc MuteConversation(ConversationMuteRequest) returns (CommonResponse);
+}
+
+message ConversationInfo {
+  uint64 conversation_id = 1;
+  int32 conversation_type = 2;
+  uint64 owner_user_id = 3;
+  uint64 peer_user_id = 4;
+  uint64 group_id = 5;
+  uint64 last_message_id = 6;
+  string last_message_preview = 7;
+  int64 last_message_at = 8;
+  int32 unread_count = 9;
+  bool pinned = 10;
+  bool muted = 11;
+  bool deleted = 12;
+  int64 updated_at = 13;
+}
+
+message ListConversationsRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  PageRequest page = 3;
+}
+
+message ListConversationsResponse {
+  CommonResponse response = 1;
+  repeated ConversationInfo conversations = 2;
+  PageResponse page = 3;
+}
+
+message ConversationMarkReadRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  uint64 conversation_id = 3;
+}
+
+message ConversationDeleteRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  uint64 conversation_id = 3;
+}
+
+message ConversationPinRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  uint64 conversation_id = 3;
+  bool pinned = 4;
+}
+
+message ConversationMuteRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  uint64 conversation_id = 3;
+  bool muted = 4;
+}

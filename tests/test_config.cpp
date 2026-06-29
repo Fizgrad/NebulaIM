@@ -10,6 +10,7 @@ int main() {
     assert(config.has("server.host"));
     assert(config.getString("server.host") == "0.0.0.0");
     assert(config.getInt("server.port") == 9000);
+    assert(config.getInt64("admin.cleanup.message_receipt_retention_ms") == 7776000000LL);
     assert(config.getBool("log.console") == true);
     assert(config.getString("missing.key", "fallback") == "fallback");
     assert(config.getInt("missing.int", 42) == 42);

@@ -6,14 +6,17 @@
 namespace nebula {
 
 class MySqlConnectionPool;
+class MySqlConnection;
 
 class RelationDao {
 public:
     explicit RelationDao(MySqlConnectionPool& pool);
 
     bool addFriend(uint64_t user_id, uint64_t friend_id);
+    bool addFriend(MySqlConnection& conn, uint64_t user_id, uint64_t friend_id);
     bool deleteFriend(uint64_t user_id, uint64_t friend_id);
     bool addFriendBidirectional(uint64_t user_id, uint64_t friend_id);
+    bool addFriendBidirectional(MySqlConnection& conn, uint64_t user_id, uint64_t friend_id);
     bool deleteFriendBidirectional(uint64_t user_id, uint64_t friend_id);
     bool isFriend(uint64_t user_id, uint64_t friend_id);
     std::vector<uint64_t> listFriends(uint64_t user_id);

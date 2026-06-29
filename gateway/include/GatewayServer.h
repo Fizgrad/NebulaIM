@@ -5,6 +5,8 @@
 #include "common/gateway/GatewayRouter.h"
 #include "common/net/TcpServer.h"
 #include "common/protocol/PacketCodec.h"
+#include "common/websocket/WebSocketCodec.h"
+#include "GatewayRateLimiter.h"
 
 #include <mutex>
 #include <string>
@@ -28,6 +30,10 @@ public:
 private:
     void onConnection(const TcpConnectionPtr& conn);
     void onMessage(const TcpConnectionPtr& conn, Buffer* buffer);
+    void onTcpMessage(const TcpConnectionPtr& conn, Buffer* buffer, const std::string& connection_id);
+    void onWebSocketMessage(const TcpConnectionPtr& conn, Buffer* buffer, const std::string& connection_id);
+    bool tryHandleWebSocketHandshake(const TcpConnectionPtr& conn, Buffer* buffer);
+    void sendPacket(const TcpConnectionPtr& conn, const Packet& packet);
     void checkHeartbeatTimeout();
     std::string getConnectionIdFromConnection(const TcpConnectionPtr& conn);
     void bindConnectionIdToConnection(const TcpConnectionPtr& conn, const std::string& connection_id);
@@ -40,9 +46,12 @@ private:
     GatewayOnlineManager* online_manager_;
     GatewayRouter* router_;
     PacketCodec codec_;
+    WebSocketCodec websocket_codec_;
+    GatewayRateLimiter rate_limiter_;
     int heartbeat_timeout_ms_;
     std::mutex conn_id_mutex_;
     std::unordered_map<std::string, std::string> conn_name_to_id_;
+    std::unordered_map<std::string, bool> websocket_connections_;
 };
 
 }  // namespace nebula

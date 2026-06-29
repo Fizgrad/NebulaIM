@@ -200,4 +200,62 @@ grpc::Status UserServiceImpl::GetUserInfo(grpc::ServerContext*,
     return grpc::Status::OK;
 }
 
+grpc::Status UserServiceImpl::Logout(grpc::ServerContext*, const proto::LogoutRequest* request, proto::CommonResponse* response) {
+    LOG_INFO("Logout token_prefix=" + tokenPrefix(request->token()));
+    if (redis_client_ == nullptr || token_manager_ == nullptr) {
+        fillResponse(response, request->request_id(), ErrorCode::INTERNAL_ERROR);
+        return grpc::Status::OK;
+    }
+    if (request->token().empty()) {
+        fillResponse(response, request->request_id(), ErrorCode::TOKEN_INVALID);
+        return grpc::Status::OK;
+    }
+    bool ok = redis_client_->del(token_manager_->tokenKey(request->token()));
+    if (!ok) {
+        fillResponse(response, request->request_id(), ErrorCode::LOGOUT_FAILED);
+        return grpc::Status::OK;
+    }
+    fillResponse(response, request->request_id(), ErrorCode::OK, "OK");
+    return grpc::Status::OK;
+}
+
+grpc::Status UserServiceImpl::RefreshToken(grpc::ServerContext*, const proto::RefreshTokenRequest* request, proto::RefreshTokenResponse* response) {
+    LOG_INFO("RefreshToken token_prefix=" + tokenPrefix(request->token()));
+    if (redis_client_ == nullptr || token_manager_ == nullptr) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR);
+        return grpc::Status::OK;
+    }
+    if (request->token().empty()) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::TOKEN_INVALID);
+        return grpc::Status::OK;
+    }
+    auto value = redis_client_->get(token_manager_->tokenKey(request->token()));
+    if (!value.has_value()) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::TOKEN_REFRESH_FAILED);
+        return grpc::Status::OK;
+    }
+
+    uint64_t user_id = 0;
+    try {
+        user_id = static_cast<uint64_t>(std::stoull(value.value()));
+    } catch (...) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::TOKEN_INVALID);
+        return grpc::Status::OK;
+    }
+
+    std::string new_token = token_manager_->generateToken(user_id);
+    if (new_token.empty() ||
+        !redis_client_->setEx(token_manager_->tokenKey(new_token), token_manager_->ttlSeconds(), std::to_string(user_id))) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::TOKEN_REFRESH_FAILED);
+        return grpc::Status::OK;
+    }
+    redis_client_->del(token_manager_->tokenKey(request->token()));
+
+    fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
+    response->set_user_id(user_id);
+    response->set_token(new_token);
+    response->set_expire_at(token_manager_->expireAtMs());
+    return grpc::Status::OK;
+}
+
 }  // namespace nebula

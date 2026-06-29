@@ -13,11 +13,16 @@ bool RelationDao::addFriend(uint64_t user_id, uint64_t friend_id) {
     if (user_id == 0 || friend_id == 0 || user_id == friend_id) return false;
     auto conn = pool_.acquire();
     if (!conn) return false;
+    return addFriend(*conn, user_id, friend_id);
+}
+
+bool RelationDao::addFriend(MySqlConnection& conn, uint64_t user_id, uint64_t friend_id) {
+    if (user_id == 0 || friend_id == 0 || user_id == friend_id) return false;
     std::string now = "UNIX_TIMESTAMP()*1000";
     std::string sql = "INSERT INTO friendships(user_id,friend_id,status,created_at,updated_at) VALUES(" +
                       std::to_string(user_id) + "," + std::to_string(friend_id) + ",1," + now + "," + now +
                       ") ON DUPLICATE KEY UPDATE status=1, updated_at=" + now;
-    return conn->executeUpdate(sql);
+    return conn.executeUpdate(sql);
 }
 
 bool RelationDao::deleteFriend(uint64_t user_id, uint64_t friend_id) {
@@ -33,15 +38,12 @@ bool RelationDao::addFriendBidirectional(uint64_t user_id, uint64_t friend_id) {
     if (!conn) return false;
     MySqlTransaction tx(*conn);
     if (!tx.active()) return false;
-    std::string now = "UNIX_TIMESTAMP()*1000";
-    std::string sql1 = "INSERT INTO friendships(user_id,friend_id,status,created_at,updated_at) VALUES(" +
-                       std::to_string(user_id) + "," + std::to_string(friend_id) + ",1," + now + "," + now +
-                       ") ON DUPLICATE KEY UPDATE status=1, updated_at=" + now;
-    std::string sql2 = "INSERT INTO friendships(user_id,friend_id,status,created_at,updated_at) VALUES(" +
-                       std::to_string(friend_id) + "," + std::to_string(user_id) + ",1," + now + "," + now +
-                       ") ON DUPLICATE KEY UPDATE status=1, updated_at=" + now;
-    if (!conn->executeUpdate(sql1) || !conn->executeUpdate(sql2)) return false;
+    if (!addFriendBidirectional(*conn, user_id, friend_id)) return false;
     return tx.commit();
+}
+
+bool RelationDao::addFriendBidirectional(MySqlConnection& conn, uint64_t user_id, uint64_t friend_id) {
+    return addFriend(conn, user_id, friend_id) && addFriend(conn, friend_id, user_id);
 }
 
 bool RelationDao::deleteFriendBidirectional(uint64_t user_id, uint64_t friend_id) {

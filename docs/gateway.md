@@ -1,21 +1,37 @@
 # Gateway
 
-Gateway owns client TCP long connections and exposes GatewayService for PushService. It parses NebulaIM Packet frames, forwards requests to backend gRPC services, stores online state in Redis, and writes PUSH_MSG packets back to TCP clients.
+Gateway owns client TCP/WebSocket long connections and exposes GatewayService for PushService. It parses NebulaIM Packet frames, forwards requests to backend gRPC services, stores online state in Redis, and writes PUSH_MSG packets back to connected clients.
 
 ## Responsibilities
 
-- TCP accept and connection lifecycle.
+- TCP accept, WebSocket handshake/frame handling, and connection lifecycle.
 - PacketCodec sticky/partial packet decoding.
-- Login forwarding to UserService.
-- Message/ACK/offline pull forwarding to MessageService.
+- Login forwarding to UserService through the RPC executor.
+- Message/ACK/offline pull/read/recall forwarding to MessageService through the RPC executor.
 - Redis online state write/refresh/delete.
-- GatewayService.DeliverToConnection writes PUSH_MSG to the real TcpConnection.
+- GatewayService.DeliverToConnection writes PUSH_MSG to the real TcpConnection, wrapping it in a WebSocket binary frame when the client connection is WebSocket.
 
 ## Flow
 
-Login: client sends LOGIN_REQ -> Gateway calls UserService.Login -> bind user_id to connection_id -> write Redis online keys -> return LOGIN_RESP.
+Login: client sends LOGIN_REQ -> Gateway submits UserService.Login to RpcExecutor -> callback returns to the connection EventLoop -> bind user_id/device_id to connection_id -> write Redis online keys -> return LOGIN_RESP.
 
 Heartbeat: update active time -> refresh Redis TTL -> return HEARTBEAT_RESP.
+
+## Production Path
+
+Gateway now supports native TCP Packet clients and browser WebSocket clients on the same TCP port. WebSocket binary frame payloads are NebulaIM PacketCodec bytes, so routing and protobuf handling stay shared.
+
+Backend RPC calls are dispatched through `RpcExecutor`, which runs blocking gRPC stubs in a worker pool and posts responses back to the connection EventLoop. Heartbeat remains a fast local path and does not leave the EventLoop.
+
+Gateway connection context carries `device_id` and `platform`. The production online-state contract is the multi-device Redis key set:
+
+```text
+nebula:user:devices:{user_id}
+nebula:user:online:{user_id}:{device_id}
+nebula:user:conn:{user_id}:{device_id}
+```
+
+The older single-device helper methods still exist for a few local tests and transitional tooling, but new production flows should not depend on them.
 
 Message send: require auth -> validate user_id matches connection -> call MessageService -> return response packet.
 
@@ -25,23 +41,23 @@ Close: remove local connection state and delete Redis online state if connection
 
 ## Design notes
 
-Gateway does not write MySQL and does not consume Kafka. It uses custom TCP protocol for clients and gRPC for internal services. Current router uses synchronous gRPC calls inside the EventLoop; later phases can move business forwarding to a worker pool or async gRPC.
+Gateway does not write MySQL and does not consume Kafka. It uses the custom PacketCodec protocol over native TCP or WebSocket for clients and gRPC for internal services. Business forwarding leaves the EventLoop through `RpcExecutor`; a future deeper optimization could replace the worker-pool wrapper with native gRPC async completion queues.
 
 ## Run
 
 ```bash
-cd deploy
-docker compose up -d
-docker compose ps
-bash kafka/topics.sh
+./scripts/start_deps.sh
+./scripts/migrate_db.sh
+./scripts/init_topics.sh
 ```
 
 ```bash
-./build/user_service/nebula_user_service --config ../config/nebula.conf
-./build/message_service/nebula_message_service --config ../config/nebula.conf
-./build/push_service/nebula_push_service --config ../config/nebula.conf
-./build/gateway/nebula_gateway --config ../config/nebula.conf
+./build/user_service/nebula_user_service --config config/nebula.conf
+./build/message_service/nebula_message_service --config config/nebula.conf
+./build/push_service/nebula_push_service --config config/nebula.conf
+./build/gateway/nebula_gateway --config config/nebula.conf
 ./build/examples/gateway_client_demo --host 127.0.0.1 --port 9000
+./build/examples/gateway_websocket_client_demo --url ws://127.0.0.1:9000/
 ./build/examples/gateway_push_demo
 ```
 
@@ -67,4 +83,4 @@ bash kafka/topics.sh
 7. Heartbeat refreshes local activity and Redis online TTL.
 8. PushService routes to the correct gateway using Redis gateway_id and connection_id.
 9. Redis and local state may diverge; Push failure or TTL expiry repairs stale online state.
-10. Sync gRPC in EventLoop is simple but can block; async RPC or worker pool is a future optimization.
+10. Gateway avoids blocking the EventLoop by moving backend RPC work to `RpcExecutor`; native async gRPC would reduce worker-thread blocking further.

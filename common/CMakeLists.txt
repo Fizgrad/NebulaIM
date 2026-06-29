@@ -35,6 +35,20 @@ set(NEBULA_COMMON_SOURCES
     monitor/Metrics.cpp
     monitor/MetricsRegistry.cpp
     monitor/MetricsHttpServer.cpp
+    websocket/WebSocketFrame.cpp
+    websocket/WebSocketHandshake.cpp
+    websocket/WebSocketCodec.cpp
+    async/FutureCallback.cpp
+    async/RpcExecutor.cpp
+    ratelimit/TokenBucket.cpp
+    ratelimit/RateLimiter.cpp
+    circuitbreaker/CircuitBreaker.cpp
+    circuitbreaker/CircuitBreakerManager.cpp
+    trace/TraceId.cpp
+    trace/TraceContext.cpp
+    discovery/StaticServiceResolver.cpp
+    health/HealthStatus.cpp
+    security/AdminAuth.cpp
     log/Logger.cpp
     config/Config.cpp
     thread/ThreadPool.cpp
@@ -46,6 +60,8 @@ set(NEBULA_COMMON_SOURCES
     protocol/PacketCodec.cpp
     rpc/GrpcServer.cpp
     rpc/GrpcClient.cpp
+    rpc/RpcMetadata.cpp
+    rpc/GrpcTlsCredentials.cpp
     utils/TimeUtil.cpp
     error/ErrorCode.cpp
 )
@@ -64,6 +80,12 @@ if(NEBULA_ENABLE_STORAGE)
         dao/GroupDao.cpp
         dao/MessageDao.cpp
         dao/OfflineMessageDao.cpp
+        dao/FriendRequestDao.cpp
+        dao/MessageReceiptDao.cpp
+        outbox/OutboxDao.cpp
+        outbox/OutboxWorker.cpp
+        conversation/ConversationDao.cpp
+        conversation/ConversationServiceHelper.cpp
     )
 endif()
 

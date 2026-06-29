@@ -2,6 +2,7 @@
 #include "PushServiceImpl.h"
 
 #include "common/log/Logger.h"
+#include "common/rpc/GrpcTlsCredentials.h"
 
 #if defined(NEBULA_ENABLE_GRPC)
 #include <grpcpp/grpcpp.h>
@@ -35,8 +36,14 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     nebula::PushServiceImpl service(context.dispatcher());
+    auto credentials = nebula::GrpcTlsCredentials::serverCredentials(context.grpcTlsConfig());
+    if (!credentials) {
+        LOG_ERROR("failed to initialize PushService gRPC credentials");
+        context.stopWorkers();
+        return 1;
+    }
     grpc::ServerBuilder builder;
-    builder.AddListeningPort(context.listenAddress(), grpc::InsecureServerCredentials());
+    builder.AddListeningPort(context.listenAddress(), credentials);
     builder.RegisterService(&service);
     std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
     if (!server) {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common/circuitbreaker/CircuitBreaker.h"
+#include "common/rpc/GrpcTlsCredentials.h"
 #include "gateway.grpc.pb.h"
 
 #include <memory>
@@ -10,6 +12,7 @@ namespace nebula {
 class GatewayClient {
 public:
     explicit GatewayClient(const std::string& address);
+    GatewayClient(const std::string& address, const GrpcTlsConfig& tls_config);
 
     bool deliverToConnection(const std::string& request_id,
                              uint64_t user_id,
@@ -25,6 +28,7 @@ public:
                          std::string* connection_id);
 
 private:
+    CircuitBreaker breaker_;
     std::unique_ptr<proto::GatewayService::Stub> stub_;
 };
 

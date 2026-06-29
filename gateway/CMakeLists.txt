@@ -4,6 +4,8 @@ if(NEBULA_ENABLE_GRPC AND NEBULA_ENABLE_STORAGE AND CMAKE_SYSTEM_NAME STREQUAL "
         src/GatewayServiceImpl.cpp
         src/GatewayContext.cpp
         src/GatewayServer.cpp
+        src/GatewayRateLimiter.cpp
+        src/WebSocketGatewayServer.cpp
     )
 
     target_include_directories(nebula_gateway

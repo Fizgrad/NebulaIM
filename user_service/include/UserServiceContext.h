@@ -5,6 +5,7 @@
 #include "common/dao/UserDao.h"
 #include "common/db/MySqlConnectionPool.h"
 #include "common/redis/RedisClient.h"
+#include "common/rpc/GrpcTlsCredentials.h"
 
 #include <memory>
 #include <string>
@@ -23,6 +24,7 @@ public:
     TokenManager* tokenManager();
 
     std::string listenAddress() const;
+    const GrpcTlsConfig& grpcTlsConfig() const;
     int passwordMinLength() const;
 
 private:
@@ -33,6 +35,7 @@ private:
     std::unique_ptr<TokenManager> token_manager_;
 
     std::string listen_address_;
+    GrpcTlsConfig grpc_tls_config_;
     int password_min_length_;
 };
 

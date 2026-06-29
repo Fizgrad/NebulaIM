@@ -1,0 +1,11 @@
+# Optional native TCP TLS entry for native clients.
+# Put this file under nginx.conf stream { ... }, not under http { ... }.
+
+server {
+    listen 9443 ssl;
+    proxy_pass 127.0.0.1:9000;
+
+    ssl_certificate /etc/letsencrypt/live/nebula.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/nebula.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+}

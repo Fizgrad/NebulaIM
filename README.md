@@ -4,15 +4,18 @@
 
 # NebulaIM
 
-NebulaIM is a C++17 high-performance distributed instant messaging system featuring a custom epoll/Reactor TCP gateway, binary packet protocol, gRPC microservices, MySQL, Redis, Kafka, Prometheus/Grafana, and benchmark tooling.
+NebulaIM is a C++17 high-performance distributed instant messaging system featuring a custom epoll/Reactor TCP/WebSocket gateway, binary packet protocol, gRPC microservices, MySQL, Redis, Kafka, Prometheus/Grafana, and benchmark tooling.
 
 ## Architecture
 
 ```text
-Client
+Native Client
   | TCP + PacketCodec
   v
-Gateway ---- GatewayService.DeliverToConnection <---- PushService <---- Kafka <---- MessageService
+Gateway ---- GatewayService.DeliverToConnection <---- PushService <---- Kafka/Outbox <---- MessageService
+  ^
+  | WebSocket binary frame + PacketCodec
+Browser
   |                    |                              |                 |
   | gRPC               |                              v                 v
   v                    +--------------------------> Redis            MySQL
@@ -28,26 +31,40 @@ MySQL / Redis
 2. Custom binary protocol with magic/version/body_length/sequence_id.
 3. Gateway long-connection access and backend gRPC routing.
 4. UserService with MySQL + Redis token auth.
-5. MessageService with message_id, dedup, MySQL persistence, Kafka produce.
-6. PushService with Kafka consume, Redis online status, Gateway RPC, offline messages, retry, DLQ.
+5. MessageService with message_id, dedup, MySQL persistence, conversation update, and Outbox Pattern.
+6. PushService with Kafka consume, Redis multi-device online status, Gateway RPC, offline messages, retry, DLQ.
 7. MySQL persistence for users, relations, groups, messages, offline messages.
 8. Redis for token, online state, dedup, retry.
 9. Prometheus/Grafana monitoring skeleton.
-10. Benchmark tools for connection/login/message/push scenarios.
+10. WebSocket Gateway, async Gateway backend RPC executor, rate limiter, circuit breaker primitives, trace ID context, migration scripts, and benchmark tools.
 
 ## Quick Start
 
 ```bash
 ./scripts/build.sh
 ./scripts/start_deps.sh
+./scripts/migrate_db.sh
 ./scripts/init_topics.sh
 ./scripts/start_services.sh
 ```
+
+Single-node production deployment:
+
+```bash
+cmake -S . -B build
+cmake --build build -j
+./scripts/render_admin_token_hash.sh 'replace-with-long-random-token'
+./scripts/validate_prod_config.sh /etc/nebulaim/nebula.conf
+sudo ./scripts/install_single_node.sh
+```
+
+See `docs/single_node_production.md` for systemd, Nginx TLS termination, backups, and health checks.
 
 Run a client:
 
 ```bash
 ./build/examples/gateway_client_demo --host 127.0.0.1 --port 9000
+./build/examples/gateway_websocket_client_demo --url ws://127.0.0.1:9000/
 ```
 
 Stop:
@@ -85,6 +102,8 @@ cmake --build . -j
 | MessageService | 50052 |
 | RelationService | 50053 |
 | PushService | 50054 |
+| ConversationService | 50056 |
+| AdminService | 50057 |
 | Prometheus | 9090 |
 | Grafana | 3000 |
 | MySQL | 3306 |
@@ -106,6 +125,28 @@ RelationService 9103
 PushService 9104
 ```
 
+## Backend Feature Matrix
+
+| Feature | Status |
+|---|---|
+| TCP Gateway | Implemented |
+| WebSocket Gateway | Implemented, same port auto-detect |
+| Gateway async backend RPC | Implemented with RpcExecutor thread pool |
+| Outbox Pattern | Implemented for message publication path |
+| Friend requests | Implemented in RelationService proto/DAO/service |
+| Conversation list | Implemented with ConversationDao and ConversationService |
+| Delivered/read semantics | ACK marks delivered; read RPCs mark read |
+| Message recall | Implemented with sender check and recall window |
+| Multi-device login | Gateway context and Redis online keys support device_id/platform |
+| Logout/RefreshToken | Implemented in UserService |
+| Rate limiting | TokenBucket/RateLimiter primitives and Gateway wrapper |
+| Circuit breaker | Gateway and Push gateway-client paths use circuit breaker primitives |
+| Service discovery | Static resolver abstraction for Gateway/Push clients |
+| Admin security | Scoped SHA-256 admin tokens, metadata auth, audit logs, and HealthCheck RPC |
+| gRPC TLS/mTLS | Config-driven server/client credentials; disabled by default for local dev |
+| Trace ID | TraceId/TraceContext plus gRPC metadata propagation; not used as Prometheus labels |
+| Database migration | `deploy/mysql/migration/V*.sql` plus `scripts/migrate_db.sh` |
+
 ## Benchmark
 
 ```bash
@@ -126,6 +167,14 @@ For integration tests, start dependencies first.
 
 ## Documentation
 
+- `docs/backend_completion.md`
+- `docs/websocket_gateway.md`
+- `docs/outbox_pattern.md`
+- `docs/conversation_design.md`
+- `docs/reliability_design.md`
+- `docs/security_design.md`
+- `docs/production_checklist.md`
+- `docs/single_node_production.md`
 - `docs/final_architecture.md`
 - `docs/deployment.md`
 - `docs/storage.md`
@@ -139,7 +188,7 @@ For integration tests, start dependencies first.
 
 ## Current Limits
 
-No WebSocket/TLS yet, Gateway backend calls are synchronous, Outbox Pattern is documented but not implemented, service discovery/config center/tracing are future work.
+Still not implemented: native TLS inside the TCP/WebSocket Gateway listener, real distributed service discovery cluster backend, Kubernetes Operator, full Jaeger/OpenTelemetry tracing backend, identity-provider backed admin console, end-to-end encryption, and multi-region deployment. For internet-facing TCP/WebSocket traffic, terminate TLS at a load balancer/Nginx/Envoy or add native TLS to the Gateway socket layer.
 
 ## License
 

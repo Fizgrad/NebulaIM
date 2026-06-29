@@ -9,6 +9,10 @@ service MessageService {
   rpc SendGroupMessage(SendGroupMessageRequest) returns (SendGroupMessageResponse);
   rpc AckMessage(AckMessageRequest) returns (AckMessageResponse);
   rpc PullOfflineMessages(PullOfflineMessagesRequest) returns (PullOfflineMessagesResponse);
+  rpc MarkMessageRead(MarkMessageReadRequest) returns (CommonResponse);
+  rpc MarkConversationRead(MarkConversationReadRequest) returns (CommonResponse);
+  rpc GetMessageReadState(GetMessageReadStateRequest) returns (GetMessageReadStateResponse);
+  rpc RecallMessage(RecallMessageRequest) returns (RecallMessageResponse);
 }
 
 message SendSingleMessageRequest {
@@ -61,4 +65,45 @@ message PullOfflineMessagesResponse {
   CommonResponse response = 1;
   repeated MessageData messages = 2;
   PageResponse page = 3;
+}
+
+message MarkMessageReadRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  uint64 message_id = 3;
+}
+
+message MarkConversationReadRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  uint64 conversation_id = 3;
+}
+
+message GetMessageReadStateRequest {
+  string request_id = 1;
+  uint64 message_id = 2;
+}
+
+message MessageReadState {
+  uint64 message_id = 1;
+  uint64 user_id = 2;
+  int64 delivered_at = 3;
+  int64 read_at = 4;
+}
+
+message GetMessageReadStateResponse {
+  CommonResponse response = 1;
+  repeated MessageReadState states = 2;
+}
+
+message RecallMessageRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  uint64 message_id = 3;
+}
+
+message RecallMessageResponse {
+  CommonResponse response = 1;
+  uint64 message_id = 2;
+  int64 recalled_at = 3;
 }

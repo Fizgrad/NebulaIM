@@ -2,7 +2,7 @@
 
 ## Responsibilities
 
-RelationService manages friendships and group membership. Phase 8 replaces mock behavior with real MySQL access through `UserDao`, `RelationDao`, and `GroupDao`.
+RelationService manages friend requests, friendships, and group membership through MySQL DAOs.
 
 ## Dependencies
 
@@ -10,6 +10,7 @@ RelationService manages friendships and group membership. Phase 8 replaces mock 
 RelationServiceImpl
   +--> UserDao
   +--> RelationDao
+  +--> FriendRequestDao
   +--> GroupDao
   +--> MySqlConnectionPool
 ```
@@ -18,7 +19,16 @@ RelationServiceImpl
 
 ## Friend flows
 
-AddFriend validates both users, rejects self-add, checks existing relation, then writes two friendship rows in a transaction:
+The public friendship workflow is request based:
+
+```text
+SendFriendRequest -> pending
+AcceptFriendRequest -> update request + insert bidirectional friendships in one transaction
+RejectFriendRequest -> rejected
+ListFriendRequests -> incoming/outgoing request views
+```
+
+Direct AddFriend is kept as an internal/admin shortcut. It validates both users, rejects self-add, checks existing relation, then writes two friendship rows in a transaction:
 
 ```text
 user_id -> friend_id
@@ -48,13 +58,12 @@ ListGroupMembers reads member IDs and returns public UserInfo.
 ## Run
 
 ```bash
-cd deploy
-docker compose up -d
-docker compose ps
+./scripts/start_deps.sh
+./scripts/migrate_db.sh
 ```
 
 ```bash
-./build/relation_service/nebula_relation_service --config ../config/nebula.conf
+./build/relation_service/nebula_relation_service --config config/nebula.conf
 ./build/examples/relation_service_client --addr 127.0.0.1:50053
 ```
 
@@ -75,12 +84,13 @@ docker compose ps
 4. `user_id + friend_id` unique index prevents duplicate rows.
 5. DeleteFriend updates both directional rows.
 6. Groups and group_members are separate for normalization and scalable membership.
-7. `group_id + user_id` unique index prevents duplicate joins.
-8. Owner leave can transfer ownership, dissolve group, or be forbidden; this phase forbids it.
-9. N+1 means each friend/member causes one user query.
-10. batchGetUsersByIds can query all user rows with `WHERE id IN (...)`.
-11. RelationService currently reads user table directly; in stricter microservices it could call UserService.
-12. Cross-service consistency can use local transactions, events, or sagas.
-13. AddFriend can be idempotent, but this phase returns `FRIEND_ALREADY_EXISTS` for clarity.
-14. JoinGroup can be idempotent, but this phase returns `GROUP_ALREADY_JOINED`.
-15. A production friend flow would usually include friend request, accept, reject, block, and audit states.
+7. Friend request unique indexes prevent duplicate pending requests.
+8. `group_id + user_id` unique index prevents duplicate joins.
+9. Owner leave can transfer ownership, dissolve group, or be forbidden; this implementation forbids it.
+10. N+1 means each friend/member causes one user query.
+11. batchGetUsersByIds can query all user rows with `WHERE id IN (...)`.
+12. RelationService currently reads user table directly; in stricter microservices it could call UserService.
+13. Cross-service consistency can use local transactions, events, or sagas.
+14. AddFriend can be idempotent, but this implementation returns `FRIEND_ALREADY_EXISTS` for clarity.
+15. JoinGroup can be idempotent, but this implementation returns `GROUP_ALREADY_JOINED`.
+16. A fuller production friend system could add block lists and moderation/audit states.

@@ -72,6 +72,24 @@ int Config::getInt(const std::string& key, int default_value) const {
     }
 }
 
+int64_t Config::getInt64(const std::string& key, int64_t default_value) const {
+    auto it = values_.find(key);
+    if (it == values_.end()) {
+        return default_value;
+    }
+
+    try {
+        size_t parsed = 0;
+        int64_t value = std::stoll(it->second, &parsed);
+        if (parsed != it->second.size()) {
+            return default_value;
+        }
+        return value;
+    } catch (...) {
+        return default_value;
+    }
+}
+
 bool Config::getBool(const std::string& key, bool default_value) const {
     auto it = values_.find(key);
     if (it == values_.end()) {

@@ -16,14 +16,18 @@ Compared with HTTP JSON, Protobuf is smaller, faster to parse, strongly typed, a
 ```text
 gateway
   | gRPC
-  +--> user_service      : Register/Login/ValidateToken/GetUserInfo
-  +--> message_service   : Send/Ack/PullOffline
-  +--> relation_service  : Friend/Group relations
-  +--> push_service      : Online/offline push routing
+  +--> user_service         : Register/Login/ValidateToken/Logout/RefreshToken/GetUserInfo
+  +--> message_service      : Send/Ack/PullOffline/Read/Recall
+  +--> relation_service     : Friend requests, friendships, groups
+  +--> conversation_service : Conversation list and conversation flags
 
 push_service
   | gRPC
   +--> gateway           : DeliverToConnection/KickUser/GetOnlineStatus
+
+admin clients
+  | gRPC metadata x-nebula-admin-token
+  +--> admin_service     : HealthCheck, cleanup, stats, outbox stats, Kafka lag placeholder
 ```
 
 ## Proto files
@@ -32,6 +36,9 @@ push_service
 - `user.proto`: `UserService` auth and user profile APIs.
 - `message.proto`: `MessageService` send, ack, and offline pull APIs.
 - `relation.proto`: `RelationService` friend and group APIs.
+- `conversation.proto`: `ConversationService` list/read/delete/pin/mute APIs.
+- `device.proto`: device management contracts.
+- `admin.proto`: internal admin health, cleanup, and stats APIs.
 - `push.proto`: `PushService` user/group push APIs.
 - `gateway.proto`: `GatewayService` backend-to-gateway delivery APIs.
 
@@ -63,14 +70,14 @@ gRPC C++ packages vary by distribution. If `find_package(gRPC REQUIRED)` cannot 
 
 ## Packet body and Protobuf
 
-Client-to-gateway TCP uses NebulaIM `PacketCodec` for framing. The packet body is an opaque binary string. Phase 5 proves that a Protobuf message can be serialized into `Packet.body`, sent through `PacketCodec`, then parsed back into the original Protobuf type.
+Client-to-gateway native TCP uses NebulaIM `PacketCodec` for framing. Browser clients use WebSocket binary frames whose payload is the same PacketCodec byte stream. The packet body is an opaque binary string containing serialized Protobuf for business request/response types.
 
 ## Examples
 
 Start UserService:
 
 ```bash
-./build/user_service/nebula_user_service
+./build/user_service/nebula_user_service --config config/nebula.conf
 ```
 
 Run client:
@@ -92,7 +99,7 @@ Run Packet + Protobuf demo:
 ./build/tests/test_grpc_user_service
 ```
 
-`test_grpc_user_service` directly instantiates the mock service implementation for stable unit testing without opening a real port.
+`test_grpc_user_service` exercises the generated gRPC contract and service implementation without requiring a long-running external process.
 
 ## Interview talking points
 
@@ -117,6 +124,6 @@ It is easier to debug but less efficient and less strongly typed. NebulaIM targe
 
 PacketCodec solves TCP framing. Protobuf solves business payload serialization. Separating them keeps the gateway protocol extensible.
 
-### Why mock service implementations now?
+### Why keep PacketCodec and gRPC separate?
 
-Storage and business logic belong to later phases. This phase validates contracts, generated code, and build wiring first.
+PacketCodec is the client transport framing protocol for long connections. gRPC is used for service-to-service communication. Keeping them separate prevents browser/native connection concerns from leaking into backend service contracts.

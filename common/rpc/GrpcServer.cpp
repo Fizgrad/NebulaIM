@@ -9,7 +9,11 @@
 namespace nebula {
 
 GrpcServer::GrpcServer(std::string address)
+    : GrpcServer(std::move(address), GrpcTlsConfig{}) {}
+
+GrpcServer::GrpcServer(std::string address, GrpcTlsConfig tls_config)
     : address_(std::move(address)),
+      tls_config_(std::move(tls_config)),
       service_(nullptr) {}
 
 GrpcServer::~GrpcServer() {
@@ -25,8 +29,12 @@ bool GrpcServer::start() {
     if (service_ == nullptr) {
         return false;
     }
+    auto credentials = GrpcTlsCredentials::serverCredentials(tls_config_);
+    if (!credentials) {
+        return false;
+    }
     grpc::ServerBuilder builder;
-    builder.AddListeningPort(address_, grpc::InsecureServerCredentials());
+    builder.AddListeningPort(address_, credentials);
     builder.RegisterService(service_);
     server_ = builder.BuildAndStart();
     if (!server_) {

@@ -103,6 +103,14 @@ uint64_t MySqlConnection::lastInsertId() const {
     return mysql_insert_id(static_cast<MYSQL*>(mysql_));
 }
 
+uint64_t MySqlConnection::affectedRows() const {
+    if (mysql_ == nullptr) {
+        return 0;
+    }
+    my_ulonglong rows = mysql_affected_rows(static_cast<MYSQL*>(mysql_));
+    return rows == static_cast<my_ulonglong>(-1) ? 0 : static_cast<uint64_t>(rows);
+}
+
 bool MySqlConnection::beginTransaction() {
     return executeUpdate("BEGIN");
 }

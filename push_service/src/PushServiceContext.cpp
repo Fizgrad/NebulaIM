@@ -49,14 +49,16 @@ bool PushServiceContext::init(const std::string& config_path) {
     options_.topic_offline = config_.getString("kafka.topic.offline", options_.topic_offline);
     options_.topic_retry = config_.getString("kafka.topic.retry", options_.topic_retry);
     options_.topic_dlq = config_.getString("kafka.topic.dlq", options_.topic_dlq);
+    grpc_tls_config_ = GrpcTlsCredentials::fromConfig(config_);
     if (!kafka_consumer_->subscribe({options_.topic_single, options_.topic_group, options_.topic_retry})) return false;
 
     offline_message_dao_ = std::make_unique<OfflineMessageDao>(mysql_pool_);
     group_dao_ = std::make_unique<GroupDao>(mysql_pool_);
     online_status_manager_ = std::make_unique<OnlineStatusManager>(redis_client_.get());
     gateway_client_manager_ = std::make_unique<GatewayClientManager>();
-    std::string gateway_id = config_.getString("gateway.default_id", "gateway-1");
-    gateway_client_manager_->addGateway(gateway_id, config_.getString("gateway." + gateway_id + ".addr", "127.0.0.1:50055"));
+    service_resolver_ = std::make_unique<StaticServiceResolver>();
+    service_resolver_->loadFromConfig(config_);
+    if (!gateway_client_manager_->initFromResolver(*service_resolver_, grpc_tls_config_)) return false;
     retry_manager_ = std::make_unique<PushRetryManager>(redis_client_.get(), options_.max_retry_count, options_.retry_ttl_seconds);
     PushOptions push_options;
     push_options.topic_retry = options_.topic_retry;
@@ -89,5 +91,6 @@ void PushServiceContext::stopWorkers() {
 PushDispatcher* PushServiceContext::dispatcher() { return dispatcher_.get(); }
 PushServiceOptions PushServiceContext::options() const { return options_; }
 std::string PushServiceContext::listenAddress() const { return listen_address_; }
+const GrpcTlsConfig& PushServiceContext::grpcTlsConfig() const { return grpc_tls_config_; }
 
 }  // namespace nebula

@@ -1,0 +1,25 @@
+[Unit]
+Description=NebulaIM PushService
+PartOf=nebulaim.target
+After=network-online.target docker.service nebula-message.service nebula-gateway.service
+
+[Service]
+Type=simple
+User=nebula
+Group=nebula
+WorkingDirectory=/opt/nebulaim
+Environment=NEBULA_CONFIG=/etc/nebulaim/nebula.conf
+ExecStart=/opt/nebulaim/bin/nebula_push_service --config ${NEBULA_CONFIG}
+Restart=always
+RestartSec=3
+LimitNOFILE=1048576
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/log/nebulaim /var/lib/nebulaim /run/nebulaim
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=nebulaim.target

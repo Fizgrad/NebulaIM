@@ -5,12 +5,13 @@
 namespace nebula {
 
 class GroupDao;
+class FriendRequestDao;
 class RelationDao;
 class UserDao;
 
 class RelationServiceImpl final : public proto::RelationService::Service {
 public:
-    RelationServiceImpl(UserDao* user_dao, RelationDao* relation_dao, GroupDao* group_dao);
+    RelationServiceImpl(UserDao* user_dao, RelationDao* relation_dao, GroupDao* group_dao, FriendRequestDao* friend_request_dao = nullptr);
 
     grpc::Status AddFriend(grpc::ServerContext* context,
                            const proto::AddFriendRequest* request,
@@ -21,6 +22,18 @@ public:
     grpc::Status ListFriends(grpc::ServerContext* context,
                              const proto::ListFriendsRequest* request,
                              proto::ListFriendsResponse* response) override;
+    grpc::Status SendFriendRequest(grpc::ServerContext* context,
+                                   const proto::SendFriendRequestRequest* request,
+                                   proto::SendFriendRequestResponse* response) override;
+    grpc::Status AcceptFriendRequest(grpc::ServerContext* context,
+                                     const proto::AcceptFriendRequestRequest* request,
+                                     proto::CommonResponse* response) override;
+    grpc::Status RejectFriendRequest(grpc::ServerContext* context,
+                                     const proto::RejectFriendRequestRequest* request,
+                                     proto::CommonResponse* response) override;
+    grpc::Status ListFriendRequests(grpc::ServerContext* context,
+                                    const proto::ListFriendRequestsRequest* request,
+                                    proto::ListFriendRequestsResponse* response) override;
     grpc::Status CreateGroup(grpc::ServerContext* context,
                              const proto::CreateGroupRequest* request,
                              proto::CreateGroupResponse* response) override;
@@ -38,6 +51,7 @@ private:
     UserDao* user_dao_;
     RelationDao* relation_dao_;
     GroupDao* group_dao_;
+    FriendRequestDao* friend_request_dao_;
 };
 
 }  // namespace nebula

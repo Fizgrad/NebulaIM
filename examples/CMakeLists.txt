@@ -78,6 +78,17 @@ if(NEBULA_ENABLE_GRPC)
             ${NEBULA_PROTOBUF_LIB}
     )
 
+    add_executable(gateway_websocket_client_demo
+        gateway_websocket_client_demo.cpp
+    )
+
+    target_link_libraries(gateway_websocket_client_demo
+        PRIVATE
+            nebula_common
+            nebula_proto
+            ${NEBULA_PROTOBUF_LIB}
+    )
+
     add_executable(gateway_push_demo
         gateway_push_demo.cpp
     )

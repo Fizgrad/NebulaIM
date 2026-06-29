@@ -26,7 +26,7 @@
 
 ## Optimization Plan
 
-- Async gRPC
-- Outbox Pattern
-- Gateway worker pool
+- Native gRPC async completion queues for the Gateway backend path
+- Outbox scan sharding and batching
+- Gateway worker pool sizing
 - Kafka partition tuning

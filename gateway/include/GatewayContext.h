@@ -1,12 +1,15 @@
 #pragma once
 
 #include "common/config/Config.h"
+#include "common/async/RpcExecutor.h"
+#include "common/discovery/StaticServiceResolver.h"
 #include "common/gateway/ConnectionManager.h"
 #include "common/gateway/GatewayBackendClients.h"
 #include "common/gateway/GatewayOnlineManager.h"
 #include "common/gateway/GatewayRouter.h"
 #include "common/protocol/PacketCodec.h"
 #include "common/redis/RedisClient.h"
+#include "common/rpc/GrpcTlsCredentials.h"
 
 #include <memory>
 #include <string>
@@ -18,6 +21,7 @@ struct GatewayOptions {
     std::string tcp_host = "0.0.0.0";
     int tcp_port = 9000;
     int tcp_worker_threads = 4;
+    int rpc_worker_threads = 4;
     std::string rpc_host = "0.0.0.0";
     int rpc_port = 50055;
     int heartbeat_timeout_ms = 30000;
@@ -46,6 +50,7 @@ public:
     std::string tcpListenIp() const;
     int tcpListenPort() const;
     std::string rpcListenAddress() const;
+    const GrpcTlsConfig& grpcTlsConfig() const;
 
 private:
     Config config_;
@@ -54,8 +59,11 @@ private:
     std::unique_ptr<ConnectionManager> connection_manager_;
     std::unique_ptr<GatewayOnlineManager> online_manager_;
     std::unique_ptr<GatewayBackendClients> backend_clients_;
+    std::unique_ptr<StaticServiceResolver> service_resolver_;
     std::unique_ptr<GatewayRouter> router_;
     std::unique_ptr<PacketCodec> codec_;
+    std::unique_ptr<RpcExecutor> rpc_executor_;
+    GrpcTlsConfig grpc_tls_config_;
 };
 
 }  // namespace nebula

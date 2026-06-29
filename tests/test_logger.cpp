@@ -1,10 +1,12 @@
 #include "common/log/Logger.h"
 
 #include <cassert>
+#include <filesystem>
 #include <fstream>
 #include <string>
 
 int main() {
+    std::filesystem::create_directories("logs");
     auto& logger = nebula::Logger::instance();
     logger.enableConsole(true);
     logger.setLevel(nebula::LogLevel::DEBUG);

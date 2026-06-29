@@ -5,6 +5,7 @@
 #include "common/log/Logger.h"
 #include "common/net/EventLoop.h"
 #include "common/net/InetAddress.h"
+#include "common/rpc/GrpcTlsCredentials.h"
 
 #if defined(NEBULA_ENABLE_GRPC)
 #include <grpcpp/grpcpp.h>
@@ -41,8 +42,13 @@ int main(int argc, char* argv[]) {
     tcp_server.start();
 
     nebula::GatewayServiceImpl rpc_service(context.connectionManager(), context.codec(), options.gateway_id);
+    auto credentials = nebula::GrpcTlsCredentials::serverCredentials(context.grpcTlsConfig());
+    if (!credentials) {
+        LOG_ERROR("failed to initialize Gateway RPC credentials");
+        return 1;
+    }
     grpc::ServerBuilder builder;
-    builder.AddListeningPort(context.rpcListenAddress(), grpc::InsecureServerCredentials());
+    builder.AddListeningPort(context.rpcListenAddress(), credentials);
     builder.RegisterService(&rpc_service);
     std::unique_ptr<grpc::Server> rpc_server(builder.BuildAndStart());
     if (!rpc_server) {

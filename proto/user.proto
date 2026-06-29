@@ -9,6 +9,8 @@ service UserService {
   rpc Login(LoginRequest) returns (LoginResponse);
   rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
   rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoResponse);
+  rpc Logout(LogoutRequest) returns (CommonResponse);
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
 }
 
 message RegisterRequest {
@@ -27,6 +29,9 @@ message LoginRequest {
   string request_id = 1;
   string username = 2;
   string password = 3;
+  string device_id = 4;
+  string platform = 5;
+  string device_name = 6;
 }
 
 message LoginResponse {
@@ -55,4 +60,24 @@ message GetUserInfoRequest {
 message GetUserInfoResponse {
   CommonResponse response = 1;
   UserInfo user = 2;
+}
+
+message LogoutRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  string token = 3;
+  string device_id = 4;
+}
+
+message RefreshTokenRequest {
+  string request_id = 1;
+  string token = 2;
+  string device_id = 3;
+}
+
+message RefreshTokenResponse {
+  CommonResponse response = 1;
+  uint64 user_id = 2;
+  string token = 3;
+  int64 expire_at = 4;
 }

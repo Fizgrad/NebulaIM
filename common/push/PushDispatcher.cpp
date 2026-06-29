@@ -24,9 +24,13 @@ PushDispatcher::PushDispatcher(OnlineStatusManager* online_status_manager,
 
 bool PushDispatcher::pushToUser(const std::string& request_id, uint64_t user_id, const proto::MessageData& message) {
     if (user_id == 0 || message.message_id() == 0) return false;
-    OnlineStatus status = online_status_manager_ ? online_status_manager_->getOnlineStatus(user_id) : OnlineStatus{};
-    if (status.online) {
-        if (deliverOnline(request_id, user_id, status, message)) {
+    auto statuses = online_status_manager_ ? online_status_manager_->getOnlineStatuses(user_id) : std::vector<OnlineStatus>{};
+    if (!statuses.empty()) {
+        bool delivered = false;
+        for (const auto& status : statuses) {
+            delivered = deliverOnline(request_id, user_id, status, message) || delivered;
+        }
+        if (delivered) {
             if (retry_manager_) retry_manager_->clearRetry(message.message_id(), user_id);
             return true;
         }

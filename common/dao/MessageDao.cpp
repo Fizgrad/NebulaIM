@@ -18,6 +18,8 @@ MessageRecord parseMessage(MySqlResult& result) {
     msg.message_type = result.getInt("message_type");
     msg.content = result.getString("content");
     msg.status = result.getInt("status");
+    msg.recalled = result.getInt("recalled") != 0;
+    msg.recalled_at = result.getInt64("recalled_at");
     msg.created_at = result.getInt64("created_at");
     msg.updated_at = result.getInt64("updated_at");
     return msg;
@@ -29,13 +31,18 @@ MessageDao::MessageDao(MySqlConnectionPool& pool) : pool_(pool) {}
 bool MessageDao::insertMessage(const MessageRecord& message) {
     auto conn = pool_.acquire();
     if (!conn) return false;
-    std::string sql = "INSERT INTO messages(message_id,conversation_id,from_user_id,to_user_id,group_id,message_type,content,status,created_at,updated_at) VALUES(" +
+    return insertMessage(*conn, message);
+}
+
+bool MessageDao::insertMessage(MySqlConnection& conn, const MessageRecord& message) {
+    std::string sql = "INSERT INTO messages(message_id,conversation_id,from_user_id,to_user_id,group_id,message_type,content,status,recalled,recalled_at,created_at,updated_at) VALUES(" +
                       std::to_string(message.message_id) + "," + std::to_string(message.conversation_id) + "," +
                       std::to_string(message.from_user_id) + "," + std::to_string(message.to_user_id) + "," +
                       std::to_string(message.group_id) + "," + std::to_string(message.message_type) + ",'" +
-                      conn->escapeString(message.content) + "'," + std::to_string(message.status) + "," +
+                      conn.escapeString(message.content) + "'," + std::to_string(message.status) + "," +
+                      std::to_string(message.recalled ? 1 : 0) + "," + std::to_string(message.recalled_at) + "," +
                       std::to_string(message.created_at) + "," + std::to_string(message.updated_at) + ")";
-    return conn->executeUpdate(sql);
+    return conn.executeUpdate(sql);
 }
 
 bool MessageDao::messageExists(uint64_t message_id) {
@@ -72,6 +79,14 @@ bool MessageDao::updateMessageStatus(uint64_t message_id, int status) {
         return false;
     }
     return messageExists(message_id);
+}
+
+bool MessageDao::recallMessage(uint64_t message_id, int64_t recalled_at) {
+    auto conn = pool_.acquire();
+    if (!conn) return false;
+    return conn->executeUpdate("UPDATE messages SET recalled=1, recalled_at=" + std::to_string(recalled_at) +
+                               ", updated_at=" + std::to_string(recalled_at) +
+                               " WHERE message_id=" + std::to_string(message_id) + " AND recalled=0");
 }
 
 }  // namespace nebula

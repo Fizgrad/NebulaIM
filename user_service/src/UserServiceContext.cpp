@@ -41,6 +41,7 @@ bool UserServiceContext::init(const std::string& config_path) {
     std::string host = config_.getString("user_service.host", "0.0.0.0");
     int port = config_.getInt("user_service.port", 50051);
     listen_address_ = host + ":" + std::to_string(port);
+    grpc_tls_config_ = GrpcTlsCredentials::fromConfig(config_);
     password_min_length_ = config_.getInt("auth.password_min_length", 6);
 
     user_dao_ = std::make_unique<UserDao>(mysql_pool_);
@@ -63,6 +64,10 @@ TokenManager* UserServiceContext::tokenManager() {
 
 std::string UserServiceContext::listenAddress() const {
     return listen_address_;
+}
+
+const GrpcTlsConfig& UserServiceContext::grpcTlsConfig() const {
+    return grpc_tls_config_;
 }
 
 int UserServiceContext::passwordMinLength() const {

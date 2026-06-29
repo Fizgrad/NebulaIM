@@ -42,6 +42,8 @@ enum MessageStatus {
   MESSAGE_STATUS_DELIVERED = 2;
   MESSAGE_STATUS_ACKED = 3;
   MESSAGE_STATUS_FAILED = 4;
+  MESSAGE_STATUS_READ = 5;
+  MESSAGE_STATUS_RECALLED = 6;
 }
 
 message MessageData {
@@ -54,4 +56,7 @@ message MessageData {
   string content = 7;
   MessageStatus status = 8;
   int64 timestamp = 9;
+  bool recalled = 10;
+  int64 recalled_at = 11;
+  string trace_id = 12;
 }

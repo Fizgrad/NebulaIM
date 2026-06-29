@@ -28,10 +28,12 @@ bool RelationServiceContext::init(const std::string& config_path) {
     std::string host = config_.getString("relation_service.host", "0.0.0.0");
     int port = config_.getInt("relation_service.port", 50053);
     listen_address_ = host + ":" + std::to_string(port);
+    grpc_tls_config_ = GrpcTlsCredentials::fromConfig(config_);
 
     user_dao_ = std::make_unique<UserDao>(mysql_pool_);
     relation_dao_ = std::make_unique<RelationDao>(mysql_pool_);
     group_dao_ = std::make_unique<GroupDao>(mysql_pool_);
+    friend_request_dao_ = std::make_unique<FriendRequestDao>(mysql_pool_);
     return true;
 }
 
@@ -47,8 +49,16 @@ GroupDao* RelationServiceContext::groupDao() {
     return group_dao_.get();
 }
 
+FriendRequestDao* RelationServiceContext::friendRequestDao() {
+    return friend_request_dao_.get();
+}
+
 std::string RelationServiceContext::listenAddress() const {
     return listen_address_;
+}
+
+const GrpcTlsConfig& RelationServiceContext::grpcTlsConfig() const {
+    return grpc_tls_config_;
 }
 
 }  // namespace nebula

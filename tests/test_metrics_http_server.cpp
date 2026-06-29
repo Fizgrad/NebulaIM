@@ -4,6 +4,8 @@
 #include <arpa/inet.h>
 #include <cassert>
 #include <chrono>
+#include <iostream>
+#include <memory>
 #include <string>
 #include <sys/socket.h>
 #include <thread>
@@ -11,15 +13,27 @@
 
 int main() {
     nebula::MetricsRegistry::instance().counter("http_test_counter_total", "http test").inc();
-    nebula::MetricsHttpServer server("127.0.0.1", 19100);
-    assert(server.start());
+    std::unique_ptr<nebula::MetricsHttpServer> server;
+    uint16_t port = 0;
+    for (uint16_t candidate = 19100; candidate < 19200; ++candidate) {
+        auto current = std::make_unique<nebula::MetricsHttpServer>("127.0.0.1", candidate);
+        if (current->start()) {
+            server = std::move(current);
+            port = candidate;
+            break;
+        }
+    }
+    if (!server) {
+        std::cout << "test_metrics_http_server skipped: no local port available\n";
+        return 0;
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     assert(fd >= 0);
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(19100);
+    addr.sin_port = htons(port);
     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
     assert(::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0);
     std::string req = "GET /metrics HTTP/1.1\r\nHost: localhost\r\n\r\n";
@@ -30,6 +44,6 @@ int main() {
     std::string resp(buf, static_cast<size_t>(n));
     assert(resp.find("http_test_counter_total") != std::string::npos);
     ::close(fd);
-    server.stop();
+    server->stop();
     return 0;
 }

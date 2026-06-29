@@ -22,7 +22,7 @@ Kafka decouples message send, fanout, offline handling, retry, and DLQ processin
 
 ## Transaction wrapper
 
-`MySqlTransaction` starts a transaction on construction. If `commit()` is not called, destructor rolls back automatically. This will be used later for message + offline-message consistency.
+`MySqlTransaction` starts a transaction on construction. If `commit()` is not called, the destructor rolls back automatically. MessageService uses it to commit `messages`, `conversations`, and `outbox_events` atomically.
 
 ## Tables and indexes
 
@@ -38,13 +38,19 @@ Kafka decouples message send, fanout, offline handling, retry, and DLQ processin
 - `messages.idx_group_time`: query group messages.
 - `offline_messages.uk_user_message`: dedup offline message per user.
 - `offline_messages.idx_user_status_time`: pull undelivered offline messages by user in time order.
+- `friend_requests.uk_from_to_status`: dedup pending friend requests.
+- `conversations.uk_owner_conversation`: one conversation view per owner user.
+- `outbox_events.idx_status_retry_time`: scan publishable outbox events.
+- `user_devices.uk_user_device`: dedup device records per user.
+- `message_receipts.uk_message_user`: dedup delivered/read receipt per message and user.
 
 ## Redis keys
 
 ```text
 nebula:token:{token} -> user_id, TTL token lifetime
-nebula:user:online:{user_id} -> gateway_id, TTL heartbeat window
-nebula:user:conn:{user_id} -> connection_id, TTL heartbeat window
+nebula:user:devices:{user_id} -> set(device_id), TTL heartbeat window
+nebula:user:online:{user_id}:{device_id} -> gateway_id, TTL heartbeat window
+nebula:user:conn:{user_id}:{device_id} -> connection_id, TTL heartbeat window
 nebula:rate_limit:user:{user_id} -> counter, TTL one window
 nebula:session:recent:{user_id} -> sorted/recent sessions, TTL days
 nebula:msg:dedup:{message_id} -> exists, TTL dedup window
@@ -73,22 +79,24 @@ DAO classes keep SQL in one layer:
 - `GroupDao`
 - `MessageDao`
 - `OfflineMessageDao`
+- `FriendRequestDao`
+- `MessageReceiptDao`
+- `ConversationDao`
+- `OutboxDao`
 
 This prevents business services from directly assembling SQL and keeps escaping and schema knowledge centralized.
 
 ## Docker Compose
 
 ```bash
-cd deploy
-docker compose up -d
-docker compose ps
+./scripts/start_deps.sh
 ```
 
 Create Kafka topics:
 
 ```bash
-docker exec -it nebula-kafka bash /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
-bash kafka/topics.sh
+./scripts/init_topics.sh
+docker exec nebula-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list
 ```
 
 ## Build dependencies
@@ -125,10 +133,10 @@ These tests require MySQL, Redis, and Kafka from Docker Compose:
 4. Redis is suitable for online status because it is low-latency and supports TTL.
 5. Online status TTL handles heartbeat expiry and gateway crashes.
 6. Gateway crash cleanup can rely on TTL plus startup reconciliation.
-7. Write-MySQL-then-Kafka gives durability before delivery; Kafka-first gives lower latency but needs async persistence recovery.
+7. Outbox Pattern avoids the MySQL/Kafka dual-write gap by committing message data and publish intent in one local transaction.
 8. Kafka absorbs spikes and decouples producers from consumers.
 9. Kafka key by conversation keeps same conversation mostly ordered in one partition.
-10. Duplicate consumption is handled by message_id dedup in DB/Redis.
+10. Duplicate consumption is handled by message_id and receipt/outbox idempotency in DB/Redis.
 11. offline_messages needs `user_id + status + created_at` for offline pull pagination.
 12. messages needs `conversation_id + created_at` for conversation history.
 13. DAO centralizes SQL and schema mapping.
