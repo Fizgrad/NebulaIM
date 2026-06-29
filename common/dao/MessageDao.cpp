@@ -84,9 +84,13 @@ bool MessageDao::updateMessageStatus(uint64_t message_id, int status) {
 bool MessageDao::recallMessage(uint64_t message_id, int64_t recalled_at) {
     auto conn = pool_.acquire();
     if (!conn) return false;
-    return conn->executeUpdate("UPDATE messages SET recalled=1, recalled_at=" + std::to_string(recalled_at) +
-                               ", updated_at=" + std::to_string(recalled_at) +
-                               " WHERE message_id=" + std::to_string(message_id) + " AND recalled=0");
+    return recallMessage(*conn, message_id, recalled_at);
+}
+
+bool MessageDao::recallMessage(MySqlConnection& conn, uint64_t message_id, int64_t recalled_at) {
+    return conn.executeUpdate("UPDATE messages SET recalled=1, recalled_at=" + std::to_string(recalled_at) +
+                              ", updated_at=" + std::to_string(recalled_at) +
+                              " WHERE message_id=" + std::to_string(message_id) + " AND recalled=0");
 }
 
 }  // namespace nebula

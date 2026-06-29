@@ -19,7 +19,9 @@ public:
     AdminServiceImpl(AdminAuth admin_auth,
                      MySqlConnectionPool* mysql_pool,
                      RedisClient* redis_client,
-                     AdminCleanupOptions cleanup_options = {});
+                     AdminCleanupOptions cleanup_options = {},
+                     KafkaConsumerConfig kafka_consumer_config = {},
+                     std::vector<std::string> kafka_topics = {});
 #endif
 
     grpc::Status RunCleanup(grpc::ServerContext* context,
@@ -50,6 +52,7 @@ private:
                          const std::string& table,
                          const std::string& condition,
                          bool dry_run) const;
+    uint64_t cleanupStaleOnlineDevices(bool dry_run, int batch_size) const;
 #endif
 
 private:
@@ -58,6 +61,8 @@ private:
     MySqlConnectionPool* mysql_pool_ = nullptr;
     RedisClient* redis_client_ = nullptr;
     AdminCleanupOptions cleanup_options_;
+    KafkaConsumerConfig kafka_consumer_config_;
+    std::vector<std::string> kafka_topics_;
 #endif
 };
 

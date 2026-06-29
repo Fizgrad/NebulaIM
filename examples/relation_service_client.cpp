@@ -57,14 +57,25 @@ int main(int argc, char** argv) {
 
     auto stub = nebula::proto::RelationService::NewStub(grpc::CreateChannel(parseAddress(argc, argv), grpc::InsecureChannelCredentials()));
 
-    nebula::proto::AddFriendRequest add_req;
-    add_req.set_request_id("client-add");
-    add_req.set_user_id(u1);
-    add_req.set_friend_id(u2);
-    nebula::proto::CommonResponse add_resp;
-    grpc::ClientContext add_ctx;
-    stub->AddFriend(&add_ctx, add_req, &add_resp);
-    std::cout << "AddFriend code=" << add_resp.code() << std::endl;
+    nebula::proto::SendFriendRequestRequest friend_req;
+    friend_req.set_request_id("client-friend-request");
+    friend_req.set_from_user_id(u1);
+    friend_req.set_to_user_id(u2);
+    friend_req.set_message("hello");
+    nebula::proto::SendFriendRequestResponse friend_resp;
+    grpc::ClientContext friend_ctx;
+    stub->SendFriendRequest(&friend_ctx, friend_req, &friend_resp);
+    std::cout << "SendFriendRequest code=" << friend_resp.response().code()
+              << " request_id=" << friend_resp.friend_request_id() << std::endl;
+
+    nebula::proto::AcceptFriendRequestRequest accept_req;
+    accept_req.set_request_id("client-friend-accept");
+    accept_req.set_user_id(u2);
+    accept_req.set_friend_request_id(friend_resp.friend_request_id());
+    nebula::proto::CommonResponse accept_resp;
+    grpc::ClientContext accept_ctx;
+    stub->AcceptFriendRequest(&accept_ctx, accept_req, &accept_resp);
+    std::cout << "AcceptFriendRequest code=" << accept_resp.code() << std::endl;
 
     nebula::proto::ListFriendsRequest list_req;
     list_req.set_request_id("client-list");

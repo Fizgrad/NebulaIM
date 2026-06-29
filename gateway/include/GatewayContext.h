@@ -22,6 +22,7 @@ struct GatewayOptions {
     int tcp_port = 9000;
     int tcp_worker_threads = 4;
     int rpc_worker_threads = 4;
+    int rpc_max_queue_size = 10000;
     std::string rpc_host = "0.0.0.0";
     int rpc_port = 50055;
     int heartbeat_timeout_ms = 30000;

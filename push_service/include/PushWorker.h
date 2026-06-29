@@ -28,10 +28,10 @@ public:
 
 private:
     void run();
-    void handleKafkaMessage(const KafkaMessage& message);
-    void handleSingleMessage(const proto::MessageData& data);
-    void handleGroupMessage(const proto::MessageData& data);
-    void handleRetryMessage(const proto::MessageData& data);
+    bool handleKafkaMessage(const KafkaMessage& message);
+    bool handleSingleMessage(const proto::MessageData& data);
+    bool handleGroupMessage(const proto::MessageData& data);
+    bool handleRetryMessage(const proto::MessageData& data);
 
 private:
     KafkaConsumer* consumer_;

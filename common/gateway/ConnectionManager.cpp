@@ -25,11 +25,9 @@ void ConnectionManager::removeConnection(const std::string& connection_id) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = contexts_.find(connection_id);
     if (it != contexts_.end() && it->second.user_id != 0) {
-        auto uit = user_to_connection_.find(it->second.user_id);
-        if (uit != user_to_connection_.end() && uit->second == connection_id) user_to_connection_.erase(uit);
         auto dit = user_device_to_connection_.find(it->second.user_id);
         if (dit != user_device_to_connection_.end()) {
-            dit->second.erase(it->second.device_id.empty() ? connection_id : it->second.device_id);
+            dit->second.erase(it->second.device_id);
             if (dit->second.empty()) user_device_to_connection_.erase(dit);
         }
     }
@@ -37,26 +35,30 @@ void ConnectionManager::removeConnection(const std::string& connection_id) {
     connections_.erase(connection_id);
 }
 
-bool ConnectionManager::bindUser(const std::string& connection_id, uint64_t user_id, const std::string& token) {
-    return bindUser(connection_id, user_id, token, connection_id, "unknown");
-}
-
 bool ConnectionManager::bindUser(const std::string& connection_id,
                                  uint64_t user_id,
                                  const std::string& token,
                                  const std::string& device_id,
                                  const std::string& platform) {
+    if (user_id == 0 || device_id.empty()) return false;
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = contexts_.find(connection_id);
     if (it == contexts_.end()) return false;
     it->second.user_id = user_id;
     it->second.token = token;
-    it->second.device_id = device_id.empty() ? connection_id : device_id;
+    it->second.device_id = device_id;
     it->second.platform = platform;
     it->second.authenticated = true;
     it->second.last_active_ms = TimeUtil::nowMs();
-    user_to_connection_[user_id] = connection_id;
     user_device_to_connection_[user_id][it->second.device_id] = connection_id;
+    return true;
+}
+
+bool ConnectionManager::markWebSocket(const std::string& connection_id, bool websocket) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = contexts_.find(connection_id);
+    if (it == contexts_.end()) return false;
+    it->second.websocket = websocket;
     return true;
 }
 
@@ -67,26 +69,9 @@ std::optional<ConnectionContext> ConnectionManager::getContext(const std::string
     return it->second;
 }
 
-std::optional<ConnectionContext> ConnectionManager::getContextByUserId(uint64_t user_id) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    auto uit = user_to_connection_.find(user_id);
-    if (uit == user_to_connection_.end()) return std::nullopt;
-    auto it = contexts_.find(uit->second);
-    if (it == contexts_.end()) return std::nullopt;
-    return it->second;
-}
-
 TcpConnectionPtr ConnectionManager::getConnection(const std::string& connection_id) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = connections_.find(connection_id);
-    return it == connections_.end() ? nullptr : it->second;
-}
-
-TcpConnectionPtr ConnectionManager::getConnectionByUserId(uint64_t user_id) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    auto uit = user_to_connection_.find(user_id);
-    if (uit == user_to_connection_.end()) return nullptr;
-    auto it = connections_.find(uit->second);
     return it == connections_.end() ? nullptr : it->second;
 }
 
@@ -138,7 +123,7 @@ size_t ConnectionManager::connectionCount() const {
 
 size_t ConnectionManager::onlineUserCount() const {
     std::lock_guard<std::mutex> lock(mutex_);
-    return user_to_connection_.size();
+    return user_device_to_connection_.size();
 }
 
 std::string ConnectionManager::generateConnectionId() {

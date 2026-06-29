@@ -1,6 +1,6 @@
 # PushService
 
-PushService consumes Kafka message topics, checks Redis online status, calls GatewayService for online users, and writes offline messages for offline users.
+PushService consumes Kafka message topics, checks Redis online status, calls GatewayService for online users, and writes offline messages for offline users. Kafka auto commit is disabled; offsets are committed only after the message is handled successfully.
 
 ## Boundaries
 
@@ -12,7 +12,7 @@ Single chat: consume `nebula.message.single`, parse MessageData, push to `to_use
 
 Group chat: consume `nebula.message.group`, list group members, skip sender by default, push each member.
 
-Retry: consume `nebula.message.retry`, retry user/group delivery. Exceeding max retry writes DLQ.
+Retry: consume `nebula.message.retry`, retry user/group delivery. Exceeding max retry writes DLQ and/or offline storage. If handling fails before that point, the consumer does not commit the offset so Kafka can redeliver.
 
 ## Redis online status
 
@@ -22,11 +22,11 @@ nebula:user:online:{user_id}:{device_id} -> gateway_id
 nebula:user:conn:{user_id}:{device_id} -> connection_id
 ```
 
-Missing device keys mean that device is offline. Gateway refreshes TTL on heartbeat and removes the current device mapping on close/logout.
+Missing device keys mean that device is offline. Gateway refreshes TTL on heartbeat and removes the current device mapping on close/logout. Push-side online reads prune stale device IDs from `nebula:user:devices:{user_id}` when either the gateway or connection key has expired.
 
-PushService defaults to all online devices for a user. Directed push can target a specific `device_id` when the caller supplies one.
+PushService defaults to all online devices for a user. The production online-state model uses only the multi-device keys above; old single-user Redis keys are not written or read by the production path.
 
-The older single-device helper methods remain in code for local tests and migration helpers, but production online state should use the multi-device keys above.
+When PushService delivers to a browser connection, GatewayService wraps the `PUSH_MSG` packet in a WebSocket binary frame before writing to the socket. Native TCP clients still receive raw NebulaIM Packet bytes.
 
 ## Retry and DLQ
 
@@ -36,7 +36,7 @@ Retry count key:
 nebula:push:retry:{message_id}:{user_id}
 ```
 
-Failure below max retry writes retry topic. Failure over max retry writes DLQ and saves offline copy.
+Failure below max retry writes retry topic. Failure over max retry writes DLQ and saves offline copy. The Kafka offset is committed only after this handling step succeeds.
 
 ## Run
 
@@ -75,6 +75,6 @@ Failure below max retry writes retry topic. Failure over max retry writes DLQ an
 7. Offline messages are written when user is offline or final delivery fails.
 8. Group fanout belongs here because PushService owns delivery expansion.
 9. Large groups require sharded fanout jobs and batching.
-10. Kafka consumers may redeliver, so downstream writes should be idempotent.
+10. Kafka consumers commit offsets after successful handling; redelivery is still possible, so downstream writes should be idempotent.
 11. Gateway RPC failure despite Redis online means stale status or gateway failure.
 12. Monitor consume lag, push success/failure, retry count, DLQ count, and Gateway RPC latency.

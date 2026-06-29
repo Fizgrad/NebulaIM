@@ -12,17 +12,18 @@ NebulaIM is a C++17 high-performance distributed instant messaging system featur
 Native Client
   | TCP + PacketCodec
   v
-Gateway ---- GatewayService.DeliverToConnection <---- PushService <---- Kafka/Outbox <---- MessageService
+Gateway -- bounded gRPC/RpcExecutor --> UserService / RelationService / MessageService
   ^
   | WebSocket binary frame + PacketCodec
 Browser
-  |                    |                              |                 |
-  | gRPC               |                              v                 v
-  v                    +--------------------------> Redis            MySQL
-UserService / RelationService
-  |
-  v
-MySQL / Redis
+
+MessageService --> MySQL(messages + conversations + outbox_events)
+                         |
+                         v
+                    OutboxWorker --> Kafka --> PushService -- GatewayService.DeliverToConnection --> Gateway
+
+UserService / RelationService / ConversationService --> MySQL / Redis
+AdminService --> health / cleanup / online stats / outbox stats / Kafka lag
 ```
 
 ## Highlights
@@ -32,11 +33,11 @@ MySQL / Redis
 3. Gateway long-connection access and backend gRPC routing.
 4. UserService with MySQL + Redis token auth.
 5. MessageService with message_id, dedup, MySQL persistence, conversation update, and Outbox Pattern.
-6. PushService with Kafka consume, Redis multi-device online status, Gateway RPC, offline messages, retry, DLQ.
+6. PushService with Kafka manual commit after successful handling, Redis multi-device online status, Gateway RPC, offline messages, retry, DLQ.
 7. MySQL persistence for users, relations, groups, messages, offline messages.
 8. Redis for token, online state, dedup, retry.
-9. Prometheus/Grafana monitoring skeleton.
-10. WebSocket Gateway, async Gateway backend RPC executor, rate limiter, circuit breaker primitives, trace ID context, migration scripts, and benchmark tools.
+9. Prometheus/Grafana monitoring assets.
+10. WebSocket Gateway, bounded async Gateway backend RPC executor, rate limiter, circuit breaker primitives, trace ID context, migration scripts, health/readiness scripts, Web SDK, and benchmark tools.
 
 ## Quick Start
 
@@ -65,6 +66,12 @@ Run a client:
 ```bash
 ./build/examples/gateway_client_demo --host 127.0.0.1 --port 9000
 ./build/examples/gateway_websocket_client_demo --url ws://127.0.0.1:9000/
+```
+
+Run the real backend E2E scenario after services are running:
+
+```bash
+NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e
 ```
 
 Stop:
@@ -131,21 +138,24 @@ PushService 9104
 |---|---|
 | TCP Gateway | Implemented |
 | WebSocket Gateway | Implemented, same port auto-detect |
-| Gateway async backend RPC | Implemented with RpcExecutor thread pool |
-| Outbox Pattern | Implemented for message publication path |
-| Friend requests | Implemented in RelationService proto/DAO/service |
+| Gateway async backend RPC | Implemented with bounded RpcExecutor thread pool |
+| Outbox Pattern | Implemented for message send and recall publication paths |
+| Kafka consumer safety | PushService disables auto commit and commits offsets after successful handling |
+| Friend requests | Implemented in RelationService proto/DAO/service; direct AddFriend is rejected in production path |
 | Conversation list | Implemented with ConversationDao and ConversationService |
 | Delivered/read semantics | ACK marks delivered; read RPCs mark read |
 | Message recall | Implemented with sender check and recall window |
-| Multi-device login | Gateway context and Redis online keys support device_id/platform |
+| Multi-device login | Gateway context, local index, and Redis online keys are device-scoped only |
 | Logout/RefreshToken | Implemented in UserService |
 | Rate limiting | TokenBucket/RateLimiter primitives and Gateway wrapper |
 | Circuit breaker | Gateway and Push gateway-client paths use circuit breaker primitives |
 | Service discovery | Static resolver abstraction for Gateway/Push clients |
-| Admin security | Scoped SHA-256 admin tokens, metadata auth, audit logs, and HealthCheck RPC |
+| Admin security | Scoped SHA-256 admin tokens, metadata auth, audit logs, HealthCheck, real online stats, outbox stats, and Kafka lag |
 | gRPC TLS/mTLS | Config-driven server/client credentials; disabled by default for local dev |
 | Trace ID | TraceId/TraceContext plus gRPC metadata propagation; not used as Prometheus labels |
-| Database migration | `deploy/mysql/migration/V*.sql` plus `scripts/migrate_db.sh` |
+| Database migration | `deploy/mysql/migration/V*.sql` plus locked/backup-aware `scripts/migrate_db.sh` |
+| Production readiness | `health_check.sh`, `wait_ready.sh`, systemd ExecStartPre checks, and Nginx WebSocket hardening |
+| Browser SDK | `web_sdk/nebulaim.js` wraps WebSocket binary Packet + protobuf calls |
 
 ## Benchmark
 
@@ -164,6 +174,12 @@ PushService 9104
 ```
 
 For integration tests, start dependencies first.
+
+Full backend E2E is opt-in so normal `ctest` remains usable without running services:
+
+```bash
+NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e
+```
 
 ## Documentation
 
@@ -185,11 +201,12 @@ For integration tests, start dependencies first.
 - `docs/interview.md`
 - `docs/troubleshooting.md`
 - `docs/roadmap.md`
+- `web_sdk/README.md`
 
 ## Current Limits
 
-Still not implemented: native TLS inside the TCP/WebSocket Gateway listener, real distributed service discovery cluster backend, Kubernetes Operator, full Jaeger/OpenTelemetry tracing backend, identity-provider backed admin console, end-to-end encryption, and multi-region deployment. For internet-facing TCP/WebSocket traffic, terminate TLS at a load balancer/Nginx/Envoy or add native TLS to the Gateway socket layer.
+Still not implemented: native TLS inside the TCP/WebSocket Gateway listener, real distributed service discovery cluster backend, Kubernetes Operator, full Jaeger/OpenTelemetry tracing backend, identity-provider backed admin console, end-to-end encryption, multi-region deployment, and native gRPC completion-queue clients. For internet-facing TCP/WebSocket traffic, terminate TLS at a load balancer/Nginx/Envoy or add native TLS to the Gateway socket layer.
 
 ## License
 
-TBD
+No standalone license file is currently included in this repository.

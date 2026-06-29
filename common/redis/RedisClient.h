@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -41,7 +42,10 @@ public:
     bool hdel(const std::string& key, const std::string& field);
 
     bool sadd(const std::string& key, const std::string& member);
+    bool srem(const std::string& key, const std::string& member);
+    int64_t scard(const std::string& key);
     std::vector<std::string> smembers(const std::string& key);
+    std::vector<std::string> scan(const std::string& pattern, size_t count = 1000);
 
     bool zadd(const std::string& key, double score, const std::string& member);
     std::vector<std::string> zrange(const std::string& key, int start, int stop);
@@ -58,6 +62,7 @@ private:
     void* context_;
     RedisConfig config_;
     std::string last_error_;
+    mutable std::mutex mutex_;
 };
 
 }  // namespace nebula

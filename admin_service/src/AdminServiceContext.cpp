@@ -39,6 +39,16 @@ bool AdminServiceContext::init(const std::string& config_path) {
         LOG_ERROR("failed to connect Redis for AdminService: " + redis_client_->lastError());
         return false;
     }
+    kafka_consumer_config_.brokers = config_.getString("kafka.brokers", kafka_consumer_config_.brokers);
+    kafka_consumer_config_.group_id = config_.getString("kafka.consumer.group_id", kafka_consumer_config_.group_id);
+    kafka_consumer_config_.client_id = config_.getString("kafka.consumer.client_id", kafka_consumer_config_.client_id);
+    kafka_consumer_config_.enable_auto_commit = false;
+    kafka_topics_ = {
+        config_.getString("kafka.topic.single", "nebula.message.single"),
+        config_.getString("kafka.topic.group", "nebula.message.group"),
+        config_.getString("kafka.topic.retry", "nebula.message.retry"),
+        config_.getString("kafka.topic.dlq", "nebula.message.dlq"),
+    };
 #endif
 
     return true;
@@ -67,6 +77,14 @@ MySqlConnectionPool* AdminServiceContext::mysqlPool() {
 
 RedisClient* AdminServiceContext::redisClient() {
     return redis_client_.get();
+}
+
+const KafkaConsumerConfig& AdminServiceContext::kafkaConsumerConfig() const {
+    return kafka_consumer_config_;
+}
+
+const std::vector<std::string>& AdminServiceContext::kafkaTopics() const {
+    return kafka_topics_;
 }
 #endif
 

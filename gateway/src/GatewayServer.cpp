@@ -52,8 +52,7 @@ void GatewayServer::onConnection(const TcpConnectionPtr& conn) {
         std::string id = getConnectionIdFromConnection(conn);
         auto ctx = connection_manager_->getContext(id);
         if (ctx.has_value() && ctx->authenticated) {
-            if (!ctx->device_id.empty()) online_manager_->setOffline(ctx->user_id, ctx->device_id, id);
-            else online_manager_->setOffline(ctx->user_id, id);
+            online_manager_->setOffline(ctx->user_id, ctx->device_id, id);
         }
         connection_manager_->removeConnection(id);
         std::lock_guard<std::mutex> lock(conn_id_mutex_);
@@ -77,6 +76,7 @@ void GatewayServer::onMessage(const TcpConnectionPtr& conn, Buffer* buffer) {
             std::lock_guard<std::mutex> lock(conn_id_mutex_);
             websocket_connections_[conn->name()] = true;
         }
+        if (connection_manager_ != nullptr) connection_manager_->markWebSocket(id, true);
         websocket = true;
     }
     if (!rate_limiter_.allowPacket(id)) {

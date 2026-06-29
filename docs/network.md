@@ -2,7 +2,7 @@
 
 ## Overall design
 
-The network library under `common/net` is a lightweight C++17 Reactor implementation for NebulaIM gateway long connections. It uses Linux epoll, nonblocking TCP sockets, eventfd for cross-thread wakeup, timerfd for timers, and the Phase 2 `Buffer` for input/output buffering.
+The network library under `common/net` is a lightweight C++17 Reactor implementation for NebulaIM gateway long connections. It uses Linux epoll, nonblocking TCP sockets, eventfd for cross-thread wakeup, timerfd for timers, and the shared `Buffer` for input/output buffering.
 
 ## Reactor model
 
@@ -58,11 +58,11 @@ A Reactor waits for IO events, dispatches callbacks, and keeps all fd operations
 
 ## Buffer and TCP sticky/partial packets
 
-TCP is a byte stream. `Buffer` keeps `reader_index` and `writer_index`, allowing the protocol layer to append bytes, parse complete frames, and leave partial frames unread until more data arrives. This is the foundation for Phase 4 packet decoding.
+TCP is a byte stream. `Buffer` keeps `reader_index` and `writer_index`, allowing the protocol layer to append bytes, parse complete NebulaIM packets, and leave partial frames unread until more data arrives. The same Buffer also feeds WebSocket handshake/frame parsing before browser payloads are passed to `PacketCodec`.
 
 ## TimerQueue and heartbeat
 
-`TimerQueue` uses `timerfd` and supports `runAt`, `runAfter`, and `runEvery`. Gateway heartbeat timeout can later be built by refreshing per-connection timers or periodically scanning last-active timestamps.
+`TimerQueue` uses `timerfd` and supports `runAt`, `runAfter`, and `runEvery`. Gateway uses connection activity timestamps and periodic checks to enforce heartbeat timeout while keeping timer callbacks inside the owning EventLoop.
 
 ## EchoServer
 

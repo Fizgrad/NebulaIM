@@ -79,7 +79,3 @@ CREATE TABLE IF NOT EXISTS offline_messages (
     UNIQUE KEY uk_user_message (user_id, message_id),
     INDEX idx_user_status_time (user_id, status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-INSERT INTO users(username, password_hash, nickname, avatar, created_at, updated_at)
-VALUES('nebula_test', 'mock_hash', 'Nebula Test', '', UNIX_TIMESTAMP()*1000, UNIX_TIMESTAMP()*1000)
-ON DUPLICATE KEY UPDATE nickname=VALUES(nickname), updated_at=VALUES(updated_at);

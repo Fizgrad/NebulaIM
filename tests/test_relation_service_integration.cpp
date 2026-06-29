@@ -24,19 +24,27 @@ uint64_t createUser(nebula::UserDao* dao, const std::string& prefix) {
 int main() {
     nebula::RelationServiceContext context;
     assert(context.init("config/nebula.conf"));
-    nebula::RelationServiceImpl service(context.userDao(), context.relationDao(), context.groupDao());
+    nebula::RelationServiceImpl service(context.userDao(), context.relationDao(), context.groupDao(), context.friendRequestDao());
     grpc::ServerContext server_context;
 
     uint64_t u1 = createUser(context.userDao(), "rsi_u1_");
     uint64_t u2 = createUser(context.userDao(), "rsi_u2_");
 
-    nebula::proto::CommonResponse add_resp;
-    nebula::proto::AddFriendRequest add_req;
-    add_req.set_request_id("integration-add");
-    add_req.set_user_id(u1);
-    add_req.set_friend_id(u2);
-    assert(service.AddFriend(&server_context, &add_req, &add_resp).ok());
-    assert(add_resp.code() == 0);
+    nebula::proto::SendFriendRequestRequest friend_req;
+    friend_req.set_request_id("integration-friend-request");
+    friend_req.set_from_user_id(u1);
+    friend_req.set_to_user_id(u2);
+    nebula::proto::SendFriendRequestResponse friend_resp;
+    assert(service.SendFriendRequest(&server_context, &friend_req, &friend_resp).ok());
+    assert(friend_resp.response().code() == 0);
+
+    nebula::proto::AcceptFriendRequestRequest accept_req;
+    accept_req.set_request_id("integration-friend-accept");
+    accept_req.set_user_id(u2);
+    accept_req.set_friend_request_id(friend_resp.friend_request_id());
+    nebula::proto::CommonResponse accept_resp;
+    assert(service.AcceptFriendRequest(&server_context, &accept_req, &accept_resp).ok());
+    assert(accept_resp.code() == 0);
 
     nebula::proto::CreateGroupRequest group_req;
     group_req.set_request_id("integration-group");

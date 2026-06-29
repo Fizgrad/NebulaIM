@@ -25,6 +25,10 @@ PushDispatcher::PushDispatcher(OnlineStatusManager* online_status_manager,
 bool PushDispatcher::pushToUser(const std::string& request_id, uint64_t user_id, const proto::MessageData& message) {
     if (user_id == 0 || message.message_id() == 0) return false;
     auto statuses = online_status_manager_ ? online_status_manager_->getOnlineStatuses(user_id) : std::vector<OnlineStatus>{};
+    LOG_INFO("push to user request_id=" + request_id +
+             " user_id=" + std::to_string(user_id) +
+             " message_id=" + std::to_string(message.message_id()) +
+             " online_devices=" + std::to_string(statuses.size()));
     if (!statuses.empty()) {
         bool delivered = false;
         for (const auto& status : statuses) {
@@ -65,7 +69,15 @@ bool PushDispatcher::deliverOnline(const std::string& request_id, uint64_t user_
     if (gateway_client_manager_ == nullptr) return false;
     GatewayClient* client = gateway_client_manager_->getClient(status.gateway_id);
     if (client == nullptr) return false;
-    return client->deliverToConnection(request_id, user_id, status.connection_id, message);
+    bool ok = client->deliverToConnection(request_id, user_id, status.connection_id, message);
+    LOG_INFO("push deliver online request_id=" + request_id +
+             " user_id=" + std::to_string(user_id) +
+             " device_id=" + status.device_id +
+             " gateway_id=" + status.gateway_id +
+             " connection_id=" + status.connection_id +
+             " message_id=" + std::to_string(message.message_id()) +
+             " ok=" + (ok ? "true" : "false"));
+    return ok;
 }
 
 bool PushDispatcher::saveOffline(uint64_t user_id, const proto::MessageData& message) {

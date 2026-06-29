@@ -27,7 +27,7 @@ push_service
 
 admin clients
   | gRPC metadata x-nebula-admin-token
-  +--> admin_service     : HealthCheck, cleanup, stats, outbox stats, Kafka lag placeholder
+  +--> admin_service     : HealthCheck, cleanup, online stats, outbox stats, Kafka lag
 ```
 
 ## Proto files
@@ -71,6 +71,10 @@ gRPC C++ packages vary by distribution. If `find_package(gRPC REQUIRED)` cannot 
 ## Packet body and Protobuf
 
 Client-to-gateway native TCP uses NebulaIM `PacketCodec` for framing. Browser clients use WebSocket binary frames whose payload is the same PacketCodec byte stream. The packet body is an opaque binary string containing serialized Protobuf for business request/response types.
+
+Gateway wraps blocking backend gRPC calls with `RpcExecutor` so EventLoop threads do not wait on synchronous stubs. The executor queue is bounded, so overload returns `SERVICE_UNAVAILABLE` instead of unbounded task growth. A future optimization can replace this wrapper with native gRPC async completion queues.
+
+PushService uses gRPC `GatewayService.DeliverToConnection` for online delivery. Gateway checks whether the target connection is native TCP or WebSocket and writes either raw Packet bytes or a WebSocket binary frame.
 
 ## Examples
 

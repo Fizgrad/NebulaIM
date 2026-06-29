@@ -37,6 +37,7 @@ public:
     std::vector<MessageRecord> listConversationMessages(uint64_t conversation_id, int64_t before_time, size_t limit);
     bool updateMessageStatus(uint64_t message_id, int status);
     bool recallMessage(uint64_t message_id, int64_t recalled_at);
+    bool recallMessage(MySqlConnection& conn, uint64_t message_id, int64_t recalled_at);
 
 private:
     MySqlConnectionPool& pool_;

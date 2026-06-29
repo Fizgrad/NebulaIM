@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
     nebula::RedisClient redis;
     redis.connect(redis_config);
     nebula::OnlineStatusManager online(&redis);
-    online.setOnline(10001, "gateway-1", "conn-10001", 60);
+    online.setOnline(10001, "device-10001", "gateway-1", "conn-10001", 60);
 
     auto stub = nebula::proto::PushService::NewStub(grpc::CreateChannel(parseAddress(argc, argv), grpc::InsecureChannelCredentials()));
     nebula::proto::MessageData message;

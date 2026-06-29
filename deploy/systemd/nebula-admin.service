@@ -9,6 +9,8 @@ User=nebula
 Group=nebula
 WorkingDirectory=/opt/nebulaim
 Environment=NEBULA_CONFIG=/etc/nebulaim/nebula.conf
+ExecStartPre=/opt/nebulaim/scripts/validate_prod_config.sh ${NEBULA_CONFIG}
+ExecStartPre=/opt/nebulaim/scripts/wait_ready.sh ${NEBULA_CONFIG} admin
 ExecStart=/opt/nebulaim/bin/nebula_admin_service --config ${NEBULA_CONFIG}
 Restart=always
 RestartSec=3

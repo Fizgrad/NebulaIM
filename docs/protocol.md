@@ -2,13 +2,22 @@
 
 ## Design goal
 
-The protocol layer defines NebulaIM's client-to-gateway binary packet format. It converts TCP byte streams into complete `Packet` objects and encodes `Packet` objects back to bytes.
+The protocol layer defines NebulaIM's client-to-gateway binary packet format. It converts native TCP byte streams or WebSocket binary payloads into complete `Packet` objects and encodes `Packet` objects back to bytes.
 
-Phase 4 does not depend on Protobuf. The body is stored as `std::string` and can contain arbitrary binary bytes. Phase 5 will place serialized Protobuf bytes into the same body field.
+`PacketCodec` owns framing only. The packet body is stored as binary bytes and normally contains serialized Protobuf request/response messages from `proto/*.proto`.
 
-## Why TCP needs an application protocol
+## Why transport needs an application protocol
 
-TCP is a reliable byte stream, not a message protocol. One `send` call may be split across multiple `recv` calls, and multiple sends may be merged into one receive buffer. The application must define packet boundaries.
+TCP is a reliable byte stream, not a message protocol. One `send` call may be split across multiple `recv` calls, and multiple sends may be merged into one receive buffer. Native TCP clients therefore need explicit packet boundaries.
+
+Browser clients connect through WebSocket. For NebulaIM, WebSocket is only a transport wrapper:
+
+```text
+WebSocket binary frame payload = NebulaIM Packet bytes
+NebulaIM Packet body = Protobuf bytes
+```
+
+Gateway does not accept JSON text frames for business traffic.
 
 ## Sticky and partial packets
 
@@ -91,6 +100,10 @@ ERROR_RESP = 9001
 
 `INCOMPLETE_PACKET` is normal and keeps Buffer unchanged. Invalid magic, version, type, or body length clears the Buffer and returns an error. Gateway should log the error and close the connection because stream boundaries are no longer trustworthy.
 
+## WebSocket boundary
+
+`WebSocketCodec` parses browser frames, validates mask/length/opcode rules, unmasks the payload, and then passes the binary payload to `PacketCodec`. Server responses and `PUSH_MSG` packets for browser connections are wrapped back into WebSocket binary frames. Native TCP connections receive the same `PacketCodec` bytes without the WebSocket frame wrapper.
+
 ## Sticky packet example
 
 ```cpp
@@ -115,7 +128,7 @@ If only 10 header bytes arrive, decode returns `INCOMPLETE_PACKET` and consumes 
 
 ## Protocol EchoServer
 
-Linux only because it uses the Phase 3 epoll network library.
+Linux only because it uses the epoll network library.
 
 ```bash
 cmake -S . -B build
@@ -123,7 +136,7 @@ cmake --build build -j
 ./build/examples/protocol_echo_server
 ```
 
-Use a custom client or later benchmark tool to send a legal NebulaIM Packet to `127.0.0.1:9001`; the server decodes and echoes the same packet.
+Use a custom client or benchmark tool to send a legal NebulaIM Packet to `127.0.0.1:9001`; the server decodes and echoes the same packet.
 
 ## Tests
 
@@ -137,7 +150,7 @@ Use a custom client or later benchmark tool to send a legal NebulaIM Packet to `
 
 1. TCP is a byte stream, so packet boundaries must be defined by the application.
 2. A good application protocol includes a fixed header, body length, type, version, and validation fields.
-3. Fixed header + variable body keeps parsing simple and supports Protobuf later.
+3. Fixed header + variable body keeps parsing simple while keeping Protobuf parsing outside the framing layer.
 4. Network byte order avoids endian incompatibility across machines.
 5. Direct struct memcpy is unsafe because of padding, alignment, and endian differences.
 6. Magic rejects invalid traffic early.

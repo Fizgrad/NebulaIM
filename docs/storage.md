@@ -12,6 +12,8 @@ MySQL persists users, relationships, groups, messages, and offline messages. The
 
 Redis stores fast-changing hot data such as tokens, online status, connection mappings, rate limits, recent sessions, and dedup keys. These values need low latency and explicit TTLs.
 
+`RedisClient` serializes commands with an internal mutex because hiredis connections are not safe for concurrent command execution. Gateway EventLoop threads and RPC callbacks can share the client instance without corrupting the Redis connection, but production deployments that need higher Redis throughput should use one client/pool per worker instead of relying on one global connection.
+
 ## Why Kafka
 
 Kafka decouples message send, fanout, offline handling, retry, and DLQ processing. It absorbs traffic spikes and lets downstream consumers scale independently.
@@ -56,6 +58,8 @@ nebula:session:recent:{user_id} -> sorted/recent sessions, TTL days
 nebula:msg:dedup:{message_id} -> exists, TTL dedup window
 ```
 
+`nebula:user:devices:{user_id}` is authoritative only as a membership set. Readers verify both per-device keys before treating a device as online, prune stale members on PushService reads, and AdminService cleanup can batch-prune stale device members.
+
 If Redis fails, auth should fall back to MySQL only when safe, online status should be treated as unknown/offline, and rate limiting should fail closed or degraded by service policy.
 
 ## Kafka topics
@@ -68,7 +72,7 @@ nebula.message.retry
 nebula.message.dlq
 ```
 
-Use `conversation_id` as key where possible so messages for the same conversation tend to land in the same partition. Consumers must be idempotent because Kafka can redeliver messages.
+Use `conversation_id` as key where possible so messages for the same conversation tend to land in the same partition. PushService disables Kafka auto commit and commits offsets only after a message is delivered, stored offline, retried, or sent to DLQ successfully. Consumers must still be idempotent because Kafka can redeliver messages after crashes or retries.
 
 ## DAO layer
 
@@ -134,7 +138,7 @@ These tests require MySQL, Redis, and Kafka from Docker Compose:
 5. Online status TTL handles heartbeat expiry and gateway crashes.
 6. Gateway crash cleanup can rely on TTL plus startup reconciliation.
 7. Outbox Pattern avoids the MySQL/Kafka dual-write gap by committing message data and publish intent in one local transaction.
-8. Kafka absorbs spikes and decouples producers from consumers.
+8. Kafka absorbs spikes and decouples producers from consumers; manual consumer commit reduces the window where a consumed message is lost before delivery handling.
 9. Kafka key by conversation keeps same conversation mostly ordered in one partition.
 10. Duplicate consumption is handled by message_id and receipt/outbox idempotency in DB/Redis.
 11. offline_messages needs `user_id + status + created_at` for offline pull pagination.

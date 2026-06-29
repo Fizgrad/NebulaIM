@@ -14,6 +14,7 @@ bool GatewayContext::init(const std::string& config_path) {
     options_.tcp_port = config_.getInt("gateway.tcp.port", options_.tcp_port);
     options_.tcp_worker_threads = config_.getInt("gateway.tcp.worker_threads", options_.tcp_worker_threads);
     options_.rpc_worker_threads = config_.getInt("gateway.rpc_worker_threads", options_.rpc_worker_threads);
+    options_.rpc_max_queue_size = config_.getInt("gateway.rpc_max_queue_size", options_.rpc_max_queue_size);
     options_.rpc_host = config_.getString("gateway.rpc.host", options_.rpc_host);
     options_.rpc_port = config_.getInt("gateway.rpc.port", options_.rpc_port);
     options_.heartbeat_timeout_ms = config_.getInt("gateway.heartbeat_timeout_ms", options_.heartbeat_timeout_ms);
@@ -40,7 +41,8 @@ bool GatewayContext::init(const std::string& config_path) {
     service_resolver_->loadFromConfig(config_);
     if (!backend_clients_->init(*service_resolver_, grpc_tls_config_)) return false;
     codec_ = std::make_unique<PacketCodec>();
-    rpc_executor_ = std::make_unique<RpcExecutor>(static_cast<size_t>(options_.rpc_worker_threads));
+    rpc_executor_ = std::make_unique<RpcExecutor>(static_cast<size_t>(options_.rpc_worker_threads),
+                                                  static_cast<size_t>(options_.rpc_max_queue_size));
     rpc_executor_->start();
     router_ = std::make_unique<GatewayRouter>(connection_manager_.get(), online_manager_.get(), backend_clients_.get(), codec_.get(), nullptr, rpc_executor_.get());
     return true;

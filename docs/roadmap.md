@@ -13,6 +13,13 @@
 - Friend request workflow
 - Conversation service
 - Admin health/cleanup/stats surface
+- Admin Kafka lag and Redis-derived online stats
+- PushService Kafka manual commit
+- Full backend E2E scenario
+- Single-node health/readiness scripts and systemd ExecStartPre checks
+- Migration locking and pre-migration backup support
+- Browser Web SDK for WebSocket Packet/protobuf calls
+- Nginx WebSocket Origin/rate/connection hardening
 
 ## Remaining
 
@@ -20,6 +27,7 @@
 - Real distributed service discovery backend
 - OpenTelemetry/Jaeger exporter
 - Large group fanout optimization
+- Native gRPC async completion-queue clients
 - Search
 - Sharding
 - CI/CD

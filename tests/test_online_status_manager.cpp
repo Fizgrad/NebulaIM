@@ -14,11 +14,12 @@ int main() {
     assert(client.connect(redis));
     nebula::OnlineStatusManager manager(&client);
     uint64_t uid = 91001;
-    assert(manager.setOnline(uid, "gateway-1", "conn-1", 60));
+    assert(manager.setOnline(uid, "device-1", "gateway-1", "conn-1", 60));
     auto status = manager.getOnlineStatus(uid);
     assert(status.online);
     assert(status.gateway_id == "gateway-1");
     assert(status.connection_id == "conn-1");
+    assert(status.device_id == "device-1");
     assert(manager.setOffline(uid));
     assert(!manager.getOnlineStatus(uid).online);
     return 0;

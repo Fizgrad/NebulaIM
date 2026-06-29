@@ -7,7 +7,7 @@ Gateway owns client TCP/WebSocket long connections and exposes GatewayService fo
 - TCP accept, WebSocket handshake/frame handling, and connection lifecycle.
 - PacketCodec sticky/partial packet decoding.
 - Register/Login forwarding to UserService through the RPC executor.
-- Message/ACK/offline pull/read/recall forwarding to MessageService through the RPC executor.
+- Message/ACK/offline pull forwarding to MessageService through the RPC executor.
 - Redis online state write/refresh/delete.
 - GatewayService.DeliverToConnection writes PUSH_MSG to the real TcpConnection, wrapping it in a WebSocket binary frame when the client connection is WebSocket.
 
@@ -23,9 +23,9 @@ Heartbeat: update active time -> refresh Redis TTL -> return HEARTBEAT_RESP.
 
 Gateway now supports native TCP Packet clients and browser WebSocket clients on the same TCP port. WebSocket binary frame payloads are NebulaIM PacketCodec bytes, so routing and protobuf handling stay shared.
 
-Backend RPC calls are dispatched through `RpcExecutor`, which runs blocking gRPC stubs in a worker pool and posts responses back to the connection EventLoop. Heartbeat remains a fast local path and does not leave the EventLoop.
+Backend RPC calls are dispatched through `RpcExecutor`, which runs blocking gRPC stubs in a worker pool and posts responses back to the connection EventLoop. The executor queue is bounded by `gateway.rpc_max_queue_size`; if it is saturated, Gateway returns `SERVICE_UNAVAILABLE` instead of growing memory without bound. Heartbeat remains a fast local path and does not leave the EventLoop.
 
-Gateway connection context carries `device_id` and `platform`. The production online-state contract is the multi-device Redis key set:
+Gateway connection context carries `device_id` and `platform`. The local connection index is `user_id + device_id -> connection_id`; there is no single `user_id -> connection_id` production index. The Redis online-state contract is:
 
 ```text
 nebula:user:devices:{user_id}
@@ -33,11 +33,13 @@ nebula:user:online:{user_id}:{device_id}
 nebula:user:conn:{user_id}:{device_id}
 ```
 
-The older single-device helper methods still exist for a few local tests and transitional tooling, but new production flows should not depend on them.
+Gateway no longer writes or reads old single-user Redis online keys. Production online state is device-scoped only.
+
+Gateway writes online state from multiple EventLoop/RPC callback paths. The shared `RedisClient` serializes hiredis commands internally, so online writes, heartbeat refreshes, and disconnect cleanup cannot corrupt one Redis connection. If a deployment raises Gateway worker concurrency materially, prefer a Redis client pool to avoid that mutex becoming a throughput bottleneck.
 
 Message send: require auth -> validate user_id matches connection -> call MessageService -> return response packet.
 
-Push: PushService calls GatewayService.DeliverToConnection -> Gateway finds connection_id -> sends PUSH_MSG packet.
+Push: PushService calls GatewayService.DeliverToConnection -> Gateway finds connection_id -> sends PUSH_MSG packet. WebSocket connections are recorded in `ConnectionContext`, so Gateway RPC delivery wraps push packets in WebSocket binary frames for browser clients and leaves native TCP clients on raw Packet bytes.
 
 Close: remove local connection state and delete Redis online state if connection_id still matches.
 
@@ -80,9 +82,9 @@ Gateway does not write MySQL and does not consume Kafka. It uses the custom Pack
 2. It should not own business persistence.
 3. TCP sticky/partial packets are handled by Buffer + PacketCodec.
 4. connection_id maps a TCP connection to user_id after login.
-5. Repeated login currently overwrites user_to_connection mapping without kicking old connection.
+5. Multi-device login records device_id/platform and Redis stores one online mapping per device.
 6. Online status has TTL to handle gateway crashes.
 7. Heartbeat refreshes local activity and Redis online TTL.
 8. PushService routes to the correct gateway using Redis gateway_id and connection_id.
 9. Redis and local state may diverge; Push failure or TTL expiry repairs stale online state.
-10. Gateway avoids blocking the EventLoop by moving backend RPC work to `RpcExecutor`; native async gRPC would reduce worker-thread blocking further.
+10. Gateway avoids blocking the EventLoop by moving backend RPC work to `RpcExecutor`; the bounded queue provides backpressure, while native async gRPC would reduce worker-thread blocking further.

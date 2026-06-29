@@ -2,8 +2,9 @@
 
 namespace nebula {
 
-ThreadPool::ThreadPool(size_t thread_num)
+ThreadPool::ThreadPool(size_t thread_num, size_t max_queue_size)
     : thread_num_(thread_num),
+      max_queue_size_(max_queue_size),
       running_(false),
       stopping_(false) {
     if (thread_num_ == 0) {
@@ -50,6 +51,11 @@ void ThreadPool::stop() {
 
     std::lock_guard<std::mutex> lock(mutex_);
     running_ = false;
+}
+
+size_t ThreadPool::queueSize() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return tasks_.size();
 }
 
 void ThreadPool::workerLoop() {

@@ -2,8 +2,8 @@
 
 namespace nebula {
 
-RpcExecutor::RpcExecutor(size_t thread_num)
-    : pool_(thread_num), pending_(0), submitted_(0), failed_(0) {}
+RpcExecutor::RpcExecutor(size_t thread_num, size_t max_queue_size)
+    : pool_(thread_num, max_queue_size), pending_(0), submitted_(0), failed_(0) {}
 
 RpcExecutor::~RpcExecutor() {
     stop();

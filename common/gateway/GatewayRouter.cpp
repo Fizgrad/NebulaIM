@@ -67,6 +67,10 @@ void GatewayRouter::sendPacket(const TcpConnectionPtr& conn, const Packet& packe
 }
 
 void GatewayRouter::sendError(const TcpConnectionPtr& conn, uint32_t sequence_id, int code, const std::string& message, const std::string& request_id) {
+    LOG_WARN("gateway send error sequence_id=" + std::to_string(sequence_id) +
+             " code=" + std::to_string(code) +
+             " message=" + message +
+             " request_id=" + request_id);
     sendPacket(conn, GatewayPacketHelper::makeErrorResponse(sequence_id, code, message, request_id));
 }
 
@@ -122,7 +126,7 @@ void GatewayRouter::handleRegister(const TcpConnectionPtr& conn, const std::stri
                 auto live_conn = connection_manager_->getConnection(connection_id);
                 if (!live_conn || !live_conn->connected()) return;
                 if (error) {
-                    sendError(live_conn, sequence_id, static_cast<int>(ErrorCode::GATEWAY_BACKEND_RPC_FAILED), "backend rpc exception", request_id);
+                    sendError(live_conn, sequence_id, static_cast<int>(ErrorCode::SERVICE_UNAVAILABLE), "gateway rpc executor unavailable", request_id);
                     return;
                 }
                 sendPacket(live_conn, GatewayPacketHelper::makeResponse(MessageType::REGISTER_RESP, sequence_id, result.resp));
@@ -189,7 +193,7 @@ void GatewayRouter::handleLogin(const TcpConnectionPtr& conn, const std::string&
                 auto live_conn = connection_manager_->getConnection(connection_id);
                 if (!live_conn || !live_conn->connected()) return;
                 if (error) {
-                    sendError(live_conn, sequence_id, static_cast<int>(ErrorCode::GATEWAY_BACKEND_RPC_FAILED), "backend rpc exception", request_id);
+                    sendError(live_conn, sequence_id, static_cast<int>(ErrorCode::SERVICE_UNAVAILABLE), "gateway rpc executor unavailable", request_id);
                     return;
                 }
                 if (result.rpc_ok && result.resp.response().code() == 0) {
@@ -228,8 +232,7 @@ void GatewayRouter::handleLogin(const TcpConnectionPtr& conn, const std::string&
 void GatewayRouter::handleHeartbeat(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet) {
     auto ctx = connection_manager_->getContext(connection_id);
     if (ctx.has_value() && ctx->authenticated) {
-        if (!ctx->device_id.empty()) online_manager_->refreshOnline(ctx->user_id, ctx->device_id, connection_id);
-        else online_manager_->refreshOnline(ctx->user_id, connection_id);
+        online_manager_->refreshOnline(ctx->user_id, ctx->device_id, connection_id);
     }
     proto::CommonResponse resp;
     resp.set_code(0);
@@ -273,7 +276,7 @@ void GatewayRouter::handleSendSingleMessage(const TcpConnectionPtr& conn, const 
                 auto live_conn = connection_manager_->getConnection(connection_id);
                 if (!live_conn || !live_conn->connected()) return;
                 if (error) {
-                    sendError(live_conn, sequence_id, static_cast<int>(ErrorCode::GATEWAY_BACKEND_RPC_FAILED), "backend rpc exception", request_id);
+                    sendError(live_conn, sequence_id, static_cast<int>(ErrorCode::SERVICE_UNAVAILABLE), "gateway rpc executor unavailable", request_id);
                     return;
                 }
                 sendPacket(live_conn, GatewayPacketHelper::makeResponse(MessageType::SEND_SINGLE_MSG_RESP, sequence_id, result.resp));
@@ -327,7 +330,7 @@ void GatewayRouter::handleSendGroupMessage(const TcpConnectionPtr& conn, const s
                 auto live_conn = connection_manager_->getConnection(connection_id);
                 if (!live_conn || !live_conn->connected()) return;
                 if (error) {
-                    sendError(live_conn, sequence_id, static_cast<int>(ErrorCode::GATEWAY_BACKEND_RPC_FAILED), "backend rpc exception", request_id);
+                    sendError(live_conn, sequence_id, static_cast<int>(ErrorCode::SERVICE_UNAVAILABLE), "gateway rpc executor unavailable", request_id);
                     return;
                 }
                 sendPacket(live_conn, GatewayPacketHelper::makeResponse(MessageType::SEND_GROUP_MSG_RESP, sequence_id, result.resp));
@@ -380,7 +383,7 @@ void GatewayRouter::handleAck(const TcpConnectionPtr& conn, const std::string& c
                 auto live_conn = connection_manager_->getConnection(connection_id);
                 if (!live_conn || !live_conn->connected()) return;
                 if (error) {
-                    sendError(live_conn, sequence_id, static_cast<int>(ErrorCode::GATEWAY_BACKEND_RPC_FAILED), "backend rpc exception", request_id);
+                    sendError(live_conn, sequence_id, static_cast<int>(ErrorCode::SERVICE_UNAVAILABLE), "gateway rpc executor unavailable", request_id);
                     return;
                 }
                 sendPacket(live_conn, GatewayPacketHelper::makeResponse(MessageType::ACK_RESP, sequence_id, result.resp));
@@ -433,7 +436,7 @@ void GatewayRouter::handlePullOfflineMessages(const TcpConnectionPtr& conn, cons
                 auto live_conn = connection_manager_->getConnection(connection_id);
                 if (!live_conn || !live_conn->connected()) return;
                 if (error) {
-                    sendError(live_conn, sequence_id, static_cast<int>(ErrorCode::GATEWAY_BACKEND_RPC_FAILED), "backend rpc exception", request_id);
+                    sendError(live_conn, sequence_id, static_cast<int>(ErrorCode::SERVICE_UNAVAILABLE), "gateway rpc executor unavailable", request_id);
                     return;
                 }
                 sendPacket(live_conn, GatewayPacketHelper::makeResponse(MessageType::PULL_OFFLINE_MSG_RESP, sequence_id, result.resp));

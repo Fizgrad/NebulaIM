@@ -21,12 +21,10 @@ public:
 
     std::string addConnection(const TcpConnectionPtr& conn, const std::string& peer_addr);
     void removeConnection(const std::string& connection_id);
-    bool bindUser(const std::string& connection_id, uint64_t user_id, const std::string& token);
     bool bindUser(const std::string& connection_id, uint64_t user_id, const std::string& token, const std::string& device_id, const std::string& platform);
+    bool markWebSocket(const std::string& connection_id, bool websocket);
     std::optional<ConnectionContext> getContext(const std::string& connection_id);
-    std::optional<ConnectionContext> getContextByUserId(uint64_t user_id);
     TcpConnectionPtr getConnection(const std::string& connection_id);
-    TcpConnectionPtr getConnectionByUserId(uint64_t user_id);
     std::vector<TcpConnectionPtr> getConnectionsByUserId(uint64_t user_id);
     std::vector<ConnectionContext> getContextsByUserId(uint64_t user_id);
     bool updateActiveTime(const std::string& connection_id);
@@ -42,7 +40,6 @@ private:
     mutable std::mutex mutex_;
     std::unordered_map<std::string, TcpConnectionPtr> connections_;
     std::unordered_map<std::string, ConnectionContext> contexts_;
-    std::unordered_map<uint64_t, std::string> user_to_connection_;
     std::unordered_map<uint64_t, std::unordered_map<std::string, std::string>> user_device_to_connection_;
     std::atomic<uint64_t> next_conn_id_;
 };

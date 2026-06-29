@@ -1,4 +1,5 @@
 #include "common/config/Config.h"
+#include "common/auth/PasswordHasher.h"
 #include "common/dao/MessageDao.h"
 #include "common/dao/UserDao.h"
 #include "common/db/MySqlConnectionPool.h"
@@ -56,7 +57,7 @@ int main() {
     int64_t now = nebula::TimeUtil::nowMs();
     nebula::User user;
     user.username = "storage_demo_" + std::to_string(now);
-    user.password_hash = "mock_hash";
+    user.password_hash = nebula::PasswordHasher::hashPassword("password123");
     user.nickname = "Storage Demo";
     user.created_at = now;
     user.updated_at = now;
@@ -70,9 +71,14 @@ int main() {
     LOG_INFO("created user id=" + std::to_string(user_id));
 
     std::string token = "demo-token-" + std::to_string(user_id);
+    std::string device_id = "storage-demo-device";
+    std::string connection_id = "storage-demo-conn-" + std::to_string(user_id);
     redis.setEx("nebula:token:" + token, 3600, std::to_string(user_id));
-    redis.setEx("nebula:user:online:" + std::to_string(user_id), 60, "gateway-1");
-    LOG_INFO("wrote Redis token and online status");
+    redis.sadd("nebula:user:devices:" + std::to_string(user_id), device_id);
+    redis.expire("nebula:user:devices:" + std::to_string(user_id), 60);
+    redis.setEx("nebula:user:online:" + std::to_string(user_id) + ":" + device_id, 60, "gateway-1");
+    redis.setEx("nebula:user:conn:" + std::to_string(user_id) + ":" + device_id, 60, connection_id);
+    LOG_INFO("wrote Redis token and device-scoped online status");
 
     nebula::MessageRecord message;
     message.message_id = static_cast<uint64_t>(now);

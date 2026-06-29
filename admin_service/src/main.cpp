@@ -33,7 +33,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 #if defined(NEBULA_ENABLE_STORAGE)
-    nebula::AdminServiceImpl service(context.adminAuth(), context.mysqlPool(), context.redisClient(), context.cleanupOptions());
+    nebula::AdminServiceImpl service(context.adminAuth(),
+                                     context.mysqlPool(),
+                                     context.redisClient(),
+                                     context.cleanupOptions(),
+                                     context.kafkaConsumerConfig(),
+                                     context.kafkaTopics());
 #else
     nebula::AdminServiceImpl service(context.adminAuth());
 #endif
@@ -55,7 +60,7 @@ int main(int argc, char* argv[]) {
     return 0;
 #else
     std::string config_path = argc > 1 ? argv[1] : "../config/nebula.conf";
-    std::cout << "nebula_admin_service placeholder ready, config=" << config_path << std::endl;
+    std::cout << "nebula_admin_service not started, config=" << config_path << std::endl;
     std::cout << "gRPC disabled: install dependencies to enable AdminService" << std::endl;
     return 0;
 #endif

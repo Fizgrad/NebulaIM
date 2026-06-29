@@ -144,11 +144,52 @@ bool RedisClient::sadd(const std::string& key, const std::string& member) {
     return ok;
 }
 
+bool RedisClient::srem(const std::string& key, const std::string& member) {
+    redisReply* reply = static_cast<redisReply*>(command("SREM %b %b", key.data(), key.size(), member.data(), member.size()));
+    bool ok = reply != nullptr && reply->type == REDIS_REPLY_INTEGER && reply->integer >= 0;
+    if (reply != nullptr) freeReplyObject(reply);
+    return ok;
+}
+
+int64_t RedisClient::scard(const std::string& key) {
+    redisReply* reply = static_cast<redisReply*>(command("SCARD %b", key.data(), key.size()));
+    int64_t value = reply != nullptr && reply->type == REDIS_REPLY_INTEGER ? reply->integer : -1;
+    if (reply != nullptr) freeReplyObject(reply);
+    return value;
+}
+
 std::vector<std::string> RedisClient::smembers(const std::string& key) {
     redisReply* reply = static_cast<redisReply*>(command("SMEMBERS %b", key.data(), key.size()));
     auto values = arrayReply(reply);
     if (reply != nullptr) freeReplyObject(reply);
     return values;
+}
+
+std::vector<std::string> RedisClient::scan(const std::string& pattern, size_t count) {
+    std::vector<std::string> keys;
+    std::string cursor = "0";
+    do {
+        redisReply* reply = static_cast<redisReply*>(
+            command("SCAN %s MATCH %b COUNT %zu", cursor.c_str(), pattern.data(), pattern.size(), count));
+        if (reply == nullptr || reply->type != REDIS_REPLY_ARRAY || reply->elements != 2) {
+            if (reply != nullptr) freeReplyObject(reply);
+            break;
+        }
+        redisReply* next_cursor = reply->element[0];
+        redisReply* key_array = reply->element[1];
+        if (next_cursor == nullptr || next_cursor->type != REDIS_REPLY_STRING ||
+            key_array == nullptr || key_array->type != REDIS_REPLY_ARRAY) {
+            freeReplyObject(reply);
+            break;
+        }
+        cursor.assign(next_cursor->str, next_cursor->len);
+        for (size_t i = 0; i < key_array->elements; ++i) {
+            redisReply* item = key_array->element[i];
+            if (item != nullptr && item->type == REDIS_REPLY_STRING) keys.emplace_back(item->str, item->len);
+        }
+        freeReplyObject(reply);
+    } while (cursor != "0");
+    return keys;
 }
 
 bool RedisClient::zadd(const std::string& key, double score, const std::string& member) {
@@ -166,10 +207,12 @@ std::vector<std::string> RedisClient::zrange(const std::string& key, int start, 
 }
 
 std::string RedisClient::lastError() const {
+    std::lock_guard<std::mutex> lock(mutex_);
     return last_error_;
 }
 
 void* RedisClient::command(const char* fmt, ...) {
+    std::lock_guard<std::mutex> lock(mutex_);
     if (context_ == nullptr) {
         last_error_ = "Redis is not connected";
         return nullptr;
@@ -190,7 +233,10 @@ bool RedisClient::checkStatus(void* reply_ptr) {
     redisReply* reply = static_cast<redisReply*>(reply_ptr);
     if (reply == nullptr) return false;
     if (reply->type == REDIS_REPLY_STATUS && std::string(reply->str) == "OK") return true;
-    if (reply->type == REDIS_REPLY_ERROR) last_error_ = reply->str;
+    if (reply->type == REDIS_REPLY_ERROR) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        last_error_ = reply->str;
+    }
     return false;
 }
 

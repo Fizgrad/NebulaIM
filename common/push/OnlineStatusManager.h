@@ -21,12 +21,10 @@ public:
 
     OnlineStatus getOnlineStatus(uint64_t user_id);
     std::vector<OnlineStatus> getOnlineStatuses(uint64_t user_id);
-    bool setOnline(uint64_t user_id, const std::string& gateway_id, const std::string& connection_id, int ttl_seconds);
+    bool setOnline(uint64_t user_id, const std::string& device_id, const std::string& gateway_id, const std::string& connection_id, int ttl_seconds);
     bool setOffline(uint64_t user_id);
 
 private:
-    std::string onlineKey(uint64_t user_id) const;
-    std::string connKey(uint64_t user_id) const;
     std::string devicesKey(uint64_t user_id) const;
     std::string onlineKey(uint64_t user_id, const std::string& device_id) const;
     std::string connKey(uint64_t user_id, const std::string& device_id) const;

@@ -37,6 +37,7 @@ bool PushServiceContext::init(const std::string& config_path) {
     consumer_config.brokers = config_.getString("kafka.brokers", consumer_config.brokers);
     consumer_config.group_id = config_.getString("kafka.consumer.group_id", "nebula-push-service");
     consumer_config.client_id = config_.getString("kafka.consumer.client_id", "nebula-push-consumer");
+    consumer_config.enable_auto_commit = config_.getBool("kafka.consumer.enable_auto_commit", consumer_config.enable_auto_commit);
     if (!kafka_consumer_->init(consumer_config)) return false;
 
     options_.worker_num = config_.getInt("push_service.worker_num", 1);

@@ -21,4 +21,16 @@ WebSocket Binary Payload = NebulaIM PacketCodec bytes
 
 That lets frontend code and bridge tools reuse the same PacketCodec semantics. Ping receives automatic pong; close closes the connection. WebSocket responses are wrapped by GatewayServer through the router packet sender hook.
 
+Push delivery also preserves the transport wrapper. `GatewayService.DeliverToConnection` checks the stored connection context; WebSocket clients receive a server WebSocket binary frame containing the `PUSH_MSG` Packet bytes, while native TCP clients receive raw Packet bytes.
+
+Browser applications should not send JSON text frames to Gateway. Use `web_sdk/nebulaim.js` or equivalent code to build:
+
+```text
+protobuf request -> NebulaIM Packet -> WebSocket binary frame
+```
+
+Common frontend mistakes are sending a display name instead of numeric `to_user_id`, opening a new socket after login, or sending text/JSON frames. Gateway closes non-binary application frames by design.
+
+For public deployment, terminate TLS at Nginx/Envoy/load balancer. `deploy/nginx/nebulaim.conf` includes a WebSocket origin allowlist, per-IP connection/request limits, request ID forwarding, and header/body limits. Replace `nebula.example.com` and allowed origins before production use.
+
 For pressure tests, count WebSocket handshake cost separately from steady-state binary frame throughput. Keep TLS termination and compression disabled unless explicitly measuring them.

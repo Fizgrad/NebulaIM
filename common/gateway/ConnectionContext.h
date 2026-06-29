@@ -12,6 +12,7 @@ struct ConnectionContext {
     std::string device_id;
     std::string platform;
     bool authenticated = false;
+    bool websocket = false;
     int64_t connected_at_ms = 0;
     int64_t last_active_ms = 0;
     std::string peer_addr;

@@ -18,11 +18,12 @@ namespace nebula {
 
 class ThreadPool : private NonCopyable {
 public:
-    explicit ThreadPool(size_t thread_num);
+    explicit ThreadPool(size_t thread_num, size_t max_queue_size = 0);
     ~ThreadPool();
 
     void start();
     void stop();
+    size_t queueSize() const;
 
     template <typename F, typename... Args>
     auto submit(F&& f, Args&&... args) -> std::future<typename std::invoke_result<F, Args...>::type>;
@@ -32,9 +33,10 @@ private:
 
 private:
     size_t thread_num_;
+    size_t max_queue_size_;
     std::vector<std::thread> workers_;
     std::queue<std::function<void()>> tasks_;
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     std::condition_variable cv_;
     bool running_;
     bool stopping_;
@@ -52,6 +54,9 @@ auto ThreadPool::submit(F&& f, Args&&... args) -> std::future<typename std::invo
         std::lock_guard<std::mutex> lock(mutex_);
         if (!running_ || stopping_) {
             throw std::runtime_error("ThreadPool is not running");
+        }
+        if (max_queue_size_ > 0 && tasks_.size() >= max_queue_size_) {
+            throw std::runtime_error("ThreadPool queue is full");
         }
         tasks_.emplace([task]() { (*task)(); });
     }

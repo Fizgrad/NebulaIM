@@ -43,11 +43,11 @@ export NEBULA_GRAFANA_PASSWORD='replace-me'
 
 ```bash
 ./scripts/start_deps_prod.sh
-MYSQL_PASSWORD="$NEBULA_MYSQL_PASSWORD" ./scripts/migrate_db.sh
+NEBULA_ENV=production MYSQL_PASSWORD="$NEBULA_MYSQL_PASSWORD" ./scripts/migrate_db.sh
 ./scripts/init_topics.sh
 ```
 
-`deploy/docker-compose.prod.yml` binds middleware ports to loopback and requires non-empty passwords through environment variables.
+`deploy/docker-compose.prod.yml` binds middleware ports to loopback and requires non-empty passwords through environment variables. In production mode the migration script takes a pre-migration backup and acquires a MySQL named lock before applying versioned SQL.
 
 ## Config
 
@@ -70,6 +70,8 @@ sudo systemctl start nebulaim.target
 sudo systemctl status nebulaim.target
 ```
 
+The service units run `validate_prod_config.sh` and `wait_ready.sh` from `ExecStartPre`, so dependencies must be reachable before each service starts.
+
 Useful commands:
 
 ```bash
@@ -80,7 +82,7 @@ sudo journalctl -u nebula-gateway.service -f
 
 ## Nginx TLS
 
-Copy `deploy/nginx/nebulaim.conf` to your Nginx site directory, replace `nebula.example.com`, and issue certificates with your preferred ACME client. The WebSocket entry forwards `/ws` to `127.0.0.1:9000`.
+Copy `deploy/nginx/nebulaim.conf` to your Nginx site directory, replace `nebula.example.com`, update the WebSocket Origin allowlist, and issue certificates with your preferred ACME client. The WebSocket entry forwards `/ws` to `127.0.0.1:9000` and includes per-IP connection/request limits, request ID forwarding, and header/body limits.
 
 For native TCP clients, use the optional `deploy/nginx/nebulaim-stream.conf.example` inside the Nginx `stream {}` context and expose a TLS TCP port such as `9443`.
 
@@ -128,3 +130,6 @@ Do not expose MySQL, Redis, Kafka, gRPC service ports, Prometheus, Grafana, or t
 7. Nginx TLS certificate is valid.
 8. `health_check.sh` passes locally.
 9. Backup job has produced at least one restorable dump.
+10. `NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e` passes against the running services.
+
+`health_check.sh` performs semantic checks for MySQL query, Redis ping, Kafka metadata, outbox pending/dead rows, service ports, and systemd status when available.

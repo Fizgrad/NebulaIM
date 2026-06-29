@@ -50,13 +50,9 @@ RelationServiceImpl::RelationServiceImpl(UserDao* user_dao, RelationDao* relatio
 
 grpc::Status RelationServiceImpl::AddFriend(grpc::ServerContext*, const proto::AddFriendRequest* request, proto::CommonResponse* response) {
     LOG_INFO("AddFriend request_id=" + request->request_id() + " user_id=" + std::to_string(request->user_id()) + " friend_id=" + std::to_string(request->friend_id()));
-    if (invalidDeps(user_dao_, relation_dao_, group_dao_)) { fillResponse(response, request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     if (request->user_id() == 0 || request->friend_id() == 0) { fillResponse(response, request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
     if (request->user_id() == request->friend_id()) { fillResponse(response, request->request_id(), ErrorCode::CANNOT_ADD_SELF); return grpc::Status::OK; }
-    if (!user_dao_->getUserById(request->user_id()).has_value() || !user_dao_->getUserById(request->friend_id()).has_value()) { fillResponse(response, request->request_id(), ErrorCode::USER_NOT_FOUND); return grpc::Status::OK; }
-    if (relation_dao_->isFriend(request->user_id(), request->friend_id())) { fillResponse(response, request->request_id(), ErrorCode::FRIEND_ALREADY_EXISTS); return grpc::Status::OK; }
-    if (!relation_dao_->addFriendBidirectional(request->user_id(), request->friend_id())) { fillResponse(response, request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
-    fillResponse(response, request->request_id(), ErrorCode::OK, "OK");
+    fillResponse(response, request->request_id(), ErrorCode::FRIEND_REQUEST_REQUIRED, "use SendFriendRequest and AcceptFriendRequest");
     return grpc::Status::OK;
 }
 

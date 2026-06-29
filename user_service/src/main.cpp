@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
     return 0;
 #else
     std::string config_path = argc > 1 ? argv[1] : "../config/nebula.conf";
-    std::cout << "nebula_user_service placeholder ready, config=" << config_path << std::endl;
+    std::cout << "nebula_user_service not started, config=" << config_path << std::endl;
     std::cout << "gRPC/storage disabled: install dependencies to enable UserService" << std::endl;
     return 0;
 #endif

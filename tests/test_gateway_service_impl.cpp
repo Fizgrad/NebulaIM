@@ -19,7 +19,7 @@ int main() {
     assert(!status_resp.online());
 
     auto conn_id = manager.addConnection(nullptr, "peer");
-    assert(manager.bindUser(conn_id, 10001, "token"));
+    assert(manager.bindUser(conn_id, 10001, "token", "device-a", "test"));
     nebula::proto::GetOnlineStatusResponse status_resp2;
     assert(service.GetOnlineStatus(&ctx, &status_req, &status_resp2).ok());
     assert(status_resp2.online());

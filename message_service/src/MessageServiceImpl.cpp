@@ -266,8 +266,10 @@ grpc::Status MessageServiceImpl::PullOfflineMessages(grpc::ServerContext*, const
 grpc::Status MessageServiceImpl::MarkMessageRead(grpc::ServerContext*, const proto::MarkMessageReadRequest* request, proto::CommonResponse* response) {
     if (invalidDeps() || message_receipt_dao_ == nullptr) { fillResponse(response, request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     if (request->user_id() == 0 || request->message_id() == 0) { fillResponse(response, request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
-    if (!message_dao_->messageExists(request->message_id())) { fillResponse(response, request->request_id(), ErrorCode::MESSAGE_NOT_FOUND); return grpc::Status::OK; }
+    auto record = message_dao_->getMessageById(request->message_id());
+    if (!record.has_value()) { fillResponse(response, request->request_id(), ErrorCode::MESSAGE_NOT_FOUND); return grpc::Status::OK; }
     if (!message_receipt_dao_->markRead(request->message_id(), request->user_id(), TimeUtil::nowMs())) { fillResponse(response, request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
+    if (conversation_dao_ != nullptr) conversation_dao_->markRead(request->user_id(), record->conversation_id);
     fillResponse(response, request->request_id(), ErrorCode::OK, "OK");
     return grpc::Status::OK;
 }
@@ -310,23 +312,27 @@ grpc::Status MessageServiceImpl::RecallMessage(grpc::ServerContext* context, con
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::MESSAGE_RECALL_TIMEOUT);
         return grpc::Status::OK;
     }
-    if (!message_dao_->recallMessage(request->message_id(), now)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
-
     record->recalled = true;
     record->recalled_at = now;
     record->status = proto::MESSAGE_STATUS_RECALLED;
     std::string payload = MessageKafkaPayload::serializeMessageData(toMessageData(*record));
     if (options_.outbox_enabled && mysql_pool_ != nullptr && outbox_dao_ != nullptr) {
         auto conn = mysql_pool_->acquire();
-        if (conn) {
-            OutboxEvent event = makeOutboxEvent(request->message_id() * 10 + 1, "message_recall", request->message_id(),
-                                                record->group_id == 0 ? options_.topic_single : options_.topic_group,
-                                                std::to_string(record->conversation_id), payload, now);
-            outbox_dao_->insertEvent(*conn, event);
-        }
+        if (!conn) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
+        MySqlTransaction tx(*conn);
+        if (!tx.active()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
+        if (!message_dao_->recallMessage(*conn, request->message_id(), now)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
+        OutboxEvent event = makeOutboxEvent(request->message_id() * 10 + 1, "message_recall", request->message_id(),
+                                            record->group_id == 0 ? options_.topic_single : options_.topic_group,
+                                            std::to_string(record->conversation_id), payload, now);
+        if (!outbox_dao_->insertEvent(*conn, event)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OUTBOX_PUBLISH_FAILED); return grpc::Status::OK; }
+        if (!tx.commit()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
     } else if (kafka_producer_ != nullptr) {
+        if (!message_dao_->recallMessage(request->message_id(), now)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
         kafka_producer_->produce(record->group_id == 0 ? options_.topic_single : options_.topic_group, std::to_string(record->conversation_id), payload);
         kafka_producer_->flush(1000);
+    } else {
+        if (!message_dao_->recallMessage(request->message_id(), now)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
     }
     fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
     response->set_message_id(request->message_id());

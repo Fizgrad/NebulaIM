@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <exception>
+#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -12,7 +13,7 @@ namespace nebula {
 
 class RpcExecutor {
 public:
-    explicit RpcExecutor(size_t thread_num);
+    explicit RpcExecutor(size_t thread_num, size_t max_queue_size = 0);
     ~RpcExecutor();
 
     void start();
@@ -38,30 +39,31 @@ void RpcExecutor::submit(EventLoop* loop, Fn&& fn, Callback&& cb) {
     pending_.fetch_add(1, std::memory_order_relaxed);
     submitted_.fetch_add(1, std::memory_order_relaxed);
 
+    auto cb_holder = std::make_shared<typename std::decay<Callback>::type>(std::forward<Callback>(cb));
     auto task = [this,
                  loop,
                  fn = std::forward<Fn>(fn),
-                 cb = std::forward<Callback>(cb)]() mutable {
+                 cb_holder]() mutable {
         try {
             if constexpr (std::is_void<ReturnType>::value) {
                 fn();
-                auto done = [cb = std::move(cb)]() mutable { cb(nullptr); };
+                auto done = [cb_holder]() mutable { (*cb_holder)(nullptr); };
                 if (loop != nullptr) loop->queueInLoop(std::move(done));
                 else done();
             } else {
                 ReturnType value = fn();
-                auto done = [cb = std::move(cb), value = std::move(value)]() mutable { cb(std::move(value), nullptr); };
+                auto done = [cb_holder, value = std::move(value)]() mutable { (*cb_holder)(std::move(value), nullptr); };
                 if (loop != nullptr) loop->queueInLoop(std::move(done));
                 else done();
             }
         } catch (...) {
             failed_.fetch_add(1, std::memory_order_relaxed);
             std::exception_ptr error = std::current_exception();
-            auto done = [cb = std::move(cb), error]() mutable {
+            auto done = [cb_holder, error]() mutable {
                 if constexpr (std::is_void<ReturnType>::value) {
-                    cb(error);
+                    (*cb_holder)(error);
                 } else {
-                    cb(ReturnType{}, error);
+                    (*cb_holder)(ReturnType{}, error);
                 }
             };
             if (loop != nullptr) loop->queueInLoop(std::move(done));
@@ -75,7 +77,16 @@ void RpcExecutor::submit(EventLoop* loop, Fn&& fn, Callback&& cb) {
     } catch (...) {
         pending_.fetch_sub(1, std::memory_order_relaxed);
         failed_.fetch_add(1, std::memory_order_relaxed);
-        throw;
+        std::exception_ptr error = std::current_exception();
+        auto done = [cb_holder, error]() mutable {
+            if constexpr (std::is_void<ReturnType>::value) {
+                (*cb_holder)(error);
+            } else {
+                (*cb_holder)(ReturnType{}, error);
+            }
+        };
+        if (loop != nullptr) loop->queueInLoop(std::move(done));
+        else done();
     }
 }
 

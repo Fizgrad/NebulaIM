@@ -6,12 +6,14 @@
 
 #if defined(NEBULA_ENABLE_STORAGE)
 #include "common/db/MySqlConnectionPool.h"
+#include "common/kafka/KafkaConsumer.h"
 #include "common/redis/RedisClient.h"
 #endif
 
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace nebula {
 
@@ -34,6 +36,8 @@ public:
 #if defined(NEBULA_ENABLE_STORAGE)
     MySqlConnectionPool* mysqlPool();
     RedisClient* redisClient();
+    const KafkaConsumerConfig& kafkaConsumerConfig() const;
+    const std::vector<std::string>& kafkaTopics() const;
 #endif
 
 private:
@@ -46,6 +50,8 @@ private:
 #if defined(NEBULA_ENABLE_STORAGE)
     MySqlConnectionPool mysql_pool_;
     std::unique_ptr<RedisClient> redis_client_;
+    KafkaConsumerConfig kafka_consumer_config_;
+    std::vector<std::string> kafka_topics_;
 #endif
 };
 

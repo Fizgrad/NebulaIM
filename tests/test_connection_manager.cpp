@@ -7,12 +7,14 @@ int main() {
     auto id = manager.addConnection(nullptr, "127.0.0.1:10000");
     assert(!id.empty());
     assert(manager.connectionCount() == 1);
-    assert(manager.bindUser(id, 10001, "token"));
+    assert(manager.bindUser(id, 10001, "token", "device-a", "test"));
     assert(manager.onlineUserCount() == 1);
     auto ctx = manager.getContext(id);
     assert(ctx.has_value());
     assert(ctx->authenticated);
-    assert(manager.getContextByUserId(10001).has_value());
+    auto contexts = manager.getContextsByUserId(10001);
+    assert(contexts.size() == 1);
+    assert(contexts.front().device_id == "device-a");
     assert(manager.updateActiveTime(id));
     auto timeout = manager.getTimeoutConnections(ctx->last_active_ms + 10000, 1);
     assert(!timeout.empty());

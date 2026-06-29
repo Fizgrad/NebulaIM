@@ -16,9 +16,11 @@ PullOfflineMessages reads undelivered offline messages by user, parses Protobuf 
 
 ## Production Updates
 
-MessageService can write `messages`, `conversations`, and `outbox_events` in one MySQL transaction. Kafka publication moves to `OutboxWorker`, which retries and marks exhausted events dead.
+MessageService writes `messages`, `conversations`, and `outbox_events` in one MySQL transaction for send requests. Kafka publication moves to `OutboxWorker`, which retries and marks exhausted events dead.
 
-Read semantics are split: ACK means delivered, while `MarkMessageRead` and `MarkConversationRead` update read state. `RecallMessage` checks sender permission and `message.recall_window_seconds` before marking a message recalled and emitting a recall event.
+Read semantics are split: ACK means delivered, while `MarkMessageRead` and `MarkConversationRead` update read state. `MarkMessageRead` also clears the corresponding conversation unread count for that user.
+
+`RecallMessage` checks sender permission and `message.recall_window_seconds`. When Outbox is enabled, the message recall update and recall outbox event are committed in the same MySQL transaction, so clients do not end up with a recalled row that has no corresponding push event.
 
 ## ID design
 
@@ -42,7 +44,7 @@ Kafka key is conversation_id so messages in the same conversation tend to enter 
 
 ## Consistency note
 
-MessageService no longer depends on Kafka success in the user request path. A successful send means the message row, conversation updates, and outbox event were committed in one MySQL transaction. `OutboxWorker` later publishes the event to Kafka and retries with backoff on transient failures. Consumers must remain idempotent because Kafka can redeliver.
+MessageService no longer depends on Kafka success in the user request path. A successful send means the message row, conversation updates, and outbox event were committed in one MySQL transaction. A successful recall means the recall state and recall event were committed together. `OutboxWorker` later publishes the event to Kafka and retries with backoff on transient failures. Consumers must remain idempotent because Kafka can redeliver.
 
 ## Run
 
@@ -65,6 +67,7 @@ MessageService no longer depends on Kafka success in the user request path. A su
 ./build/tests/test_message_deduplicator
 ./build/tests/test_message_service_impl
 ./build/tests/test_message_service_integration
+NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e
 ```
 
 ## Interview points

@@ -26,7 +26,7 @@ uint64_t createUser(nebula::UserDao* dao, const std::string& prefix) {
 int main() {
     nebula::RelationServiceContext context;
     assert(context.init("config/nebula.conf"));
-    nebula::RelationServiceImpl service(context.userDao(), context.relationDao(), context.groupDao());
+    nebula::RelationServiceImpl service(context.userDao(), context.relationDao(), context.groupDao(), context.friendRequestDao());
     grpc::ServerContext server_context;
 
     uint64_t user1 = createUser(context.userDao(), "rs_u1_");
@@ -39,7 +39,25 @@ int main() {
     add.set_user_id(user1);
     add.set_friend_id(user2);
     assert(service.AddFriend(&server_context, &add, &common).ok());
-    assert(common.code() == 0);
+    assert(common.code() == static_cast<int>(nebula::ErrorCode::FRIEND_REQUEST_REQUIRED));
+
+    nebula::proto::SendFriendRequestRequest friend_req;
+    friend_req.set_request_id("friend-request");
+    friend_req.set_from_user_id(user1);
+    friend_req.set_to_user_id(user2);
+    friend_req.set_message("hello");
+    nebula::proto::SendFriendRequestResponse friend_resp;
+    assert(service.SendFriendRequest(&server_context, &friend_req, &friend_resp).ok());
+    assert(friend_resp.response().code() == 0);
+    assert(friend_resp.friend_request_id() > 0);
+
+    nebula::proto::AcceptFriendRequestRequest accept_req;
+    accept_req.set_request_id("friend-accept");
+    accept_req.set_user_id(user2);
+    accept_req.set_friend_request_id(friend_resp.friend_request_id());
+    nebula::proto::CommonResponse accept_resp;
+    assert(service.AcceptFriendRequest(&server_context, &accept_req, &accept_resp).ok());
+    assert(accept_resp.code() == 0);
 
     nebula::proto::ListFriendsRequest list_req;
     list_req.set_request_id("list");
@@ -53,7 +71,7 @@ int main() {
 
     nebula::proto::CommonResponse repeat_add;
     assert(service.AddFriend(&server_context, &add, &repeat_add).ok());
-    assert(repeat_add.code() == static_cast<int>(nebula::ErrorCode::FRIEND_ALREADY_EXISTS));
+    assert(repeat_add.code() == static_cast<int>(nebula::ErrorCode::FRIEND_REQUEST_REQUIRED));
 
     nebula::proto::DeleteFriendRequest del;
     del.set_request_id("del");
@@ -127,7 +145,7 @@ int main() {
     bad_add.set_friend_id(user3);
     nebula::proto::CommonResponse bad_add_resp;
     assert(service.AddFriend(&server_context, &bad_add, &bad_add_resp).ok());
-    assert(bad_add_resp.code() == static_cast<int>(nebula::ErrorCode::USER_NOT_FOUND));
+    assert(bad_add_resp.code() == static_cast<int>(nebula::ErrorCode::FRIEND_REQUEST_REQUIRED));
 
     return 0;
 }

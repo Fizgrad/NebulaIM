@@ -9,6 +9,9 @@ MYSQL_PORT="${MYSQL_PORT:-3306}"
 MYSQL_USER="${MYSQL_USER:-nebula}"
 MYSQL_PASSWORD="${MYSQL_PASSWORD:-nebula}"
 MYSQL_DATABASE="${MYSQL_DATABASE:-nebula_im}"
+MIGRATION_LOCK_NAME="${MIGRATION_LOCK_NAME:-nebulaim_schema_migrations}"
+MIGRATION_LOCK_TIMEOUT="${MIGRATION_LOCK_TIMEOUT:-30}"
+NEBULA_MIGRATE_BACKUP="${NEBULA_MIGRATE_BACKUP:-false}"
 
 if command -v mysql >/dev/null 2>&1; then
     mysql_cmd=(mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u "${MYSQL_USER}" "-p${MYSQL_PASSWORD}" "${MYSQL_DATABASE}")
@@ -18,6 +21,24 @@ else
     echo "[migrate] mysql client not found and nebula-mysql container is unavailable" >&2
     exit 1
 fi
+
+release_lock() {
+    "${mysql_cmd[@]}" --batch --skip-column-names -e "SELECT RELEASE_LOCK('${MIGRATION_LOCK_NAME}')" >/dev/null 2>&1 || true
+}
+
+if [[ "${NEBULA_MIGRATE_BACKUP}" == "true" || "${NEBULA_ENV:-}" == "production" ]]; then
+    echo "[migrate] creating pre-migration backup"
+    MYSQL_HOST="${MYSQL_HOST}" MYSQL_PORT="${MYSQL_PORT}" MYSQL_USER="${MYSQL_USER}" MYSQL_PASSWORD="${MYSQL_PASSWORD}" MYSQL_DATABASE="${MYSQL_DATABASE}" \
+        "${ROOT_DIR}/scripts/backup_mysql.sh"
+fi
+
+echo "[migrate] acquiring lock ${MIGRATION_LOCK_NAME}"
+lock_acquired="$("${mysql_cmd[@]}" --batch --skip-column-names -e "SELECT GET_LOCK('${MIGRATION_LOCK_NAME}', ${MIGRATION_LOCK_TIMEOUT})")"
+if [[ "${lock_acquired}" != "1" ]]; then
+    echo "[migrate] failed to acquire migration lock ${MIGRATION_LOCK_NAME}" >&2
+    exit 1
+fi
+trap release_lock EXIT
 
 echo "[migrate] ensuring schema_migrations exists"
 "${mysql_cmd[@]}" <<'SQL'
@@ -34,10 +55,13 @@ for file in "${MIGRATION_DIR}"/V*.sql; do
         echo "[migrate] skip ${version}"
         continue
     fi
-    echo "[migrate] apply ${version}"
-    "${mysql_cmd[@]}" < "${file}"
-    now_ms="$(date +%s%3N)"
-    "${mysql_cmd[@]}" -e "INSERT INTO schema_migrations(version, applied_at) VALUES('${version}', ${now_ms})"
+	    echo "[migrate] apply ${version}"
+	    if ! "${mysql_cmd[@]}" < "${file}"; then
+	        echo "[migrate] failed at ${version}; restore from the pre-migration backup with scripts/restore_mysql.sh if rollback is required" >&2
+	        exit 1
+	    fi
+	    now_ms="$(date +%s%3N)"
+	    "${mysql_cmd[@]}" -e "INSERT INTO schema_migrations(version, applied_at) VALUES('${version}', ${now_ms})"
 done
 
 echo "[migrate] done"

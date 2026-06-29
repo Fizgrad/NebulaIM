@@ -28,14 +28,13 @@ RejectFriendRequest -> rejected
 ListFriendRequests -> incoming/outgoing request views
 ```
 
-Direct AddFriend is kept as an internal/admin shortcut. It validates both users, rejects self-add, checks existing relation, then writes two friendship rows in a transaction:
+Direct AddFriend is not a production friendship write path:
 
 ```text
-user_id -> friend_id
-friend_id -> user_id
+AddFriend -> FRIEND_REQUEST_REQUIRED
 ```
 
-Duplicate AddFriend returns `FRIEND_ALREADY_EXISTS`.
+Direct AddFriend no longer creates friendship rows in the production path. The RPC remains in the current proto surface but is disabled by policy; callers must use `SendFriendRequest` and `AcceptFriendRequest` to create friendships.
 
 DeleteFriend checks relation existence and marks both rows inactive in one transaction.
 
@@ -80,8 +79,8 @@ ListGroupMembers reads member IDs and returns public UserInfo.
 
 1. Friend relation can be stored as one bidirectional logical edge or two directional rows.
 2. Two-row design makes listFriends simple but needs transaction consistency.
-3. Duplicate AddFriend is controlled by unique index and service pre-check.
-4. `user_id + friend_id` unique index prevents duplicate rows.
+3. Direct AddFriend is rejected with `FRIEND_REQUEST_REQUIRED`; the public write path is request approval.
+4. `user_id + friend_id` unique index still prevents duplicate friendship rows after request acceptance.
 5. DeleteFriend updates both directional rows.
 6. Groups and group_members are separate for normalization and scalable membership.
 7. Friend request unique indexes prevent duplicate pending requests.
@@ -91,6 +90,6 @@ ListGroupMembers reads member IDs and returns public UserInfo.
 11. batchGetUsersByIds can query all user rows with `WHERE id IN (...)`.
 12. RelationService currently reads user table directly; in stricter microservices it could call UserService.
 13. Cross-service consistency can use local transactions, events, or sagas.
-14. AddFriend can be idempotent, but this implementation returns `FRIEND_ALREADY_EXISTS` for clarity.
+14. SendFriendRequest is intentionally separate from friendship creation so audit/moderation can be added later.
 15. JoinGroup can be idempotent, but this implementation returns `GROUP_ALREADY_JOINED`.
 16. A fuller production friend system could add block lists and moderation/audit states.

@@ -10,9 +10,11 @@
 #include "common/db/MySqlConnection.h"
 #include "common/db/MySqlConnectionPool.h"
 #include "common/db/MySqlResult.h"
+#include "common/kafka/KafkaConsumer.h"
 #include "common/redis/RedisClient.h"
 #endif
 
+#include <unordered_map>
 #include <utility>
 
 namespace nebula {
@@ -31,11 +33,15 @@ AdminServiceImpl::AdminServiceImpl(AdminAuth admin_auth) : admin_auth_(std::move
 AdminServiceImpl::AdminServiceImpl(AdminAuth admin_auth,
                                    MySqlConnectionPool* mysql_pool,
                                    RedisClient* redis_client,
-                                   AdminCleanupOptions cleanup_options)
+                                   AdminCleanupOptions cleanup_options,
+                                   KafkaConsumerConfig kafka_consumer_config,
+                                   std::vector<std::string> kafka_topics)
     : admin_auth_(std::move(admin_auth)),
       mysql_pool_(mysql_pool),
       redis_client_(redis_client),
-      cleanup_options_(cleanup_options) {}
+      cleanup_options_(cleanup_options),
+      kafka_consumer_config_(std::move(kafka_consumer_config)),
+      kafka_topics_(std::move(kafka_topics)) {}
 #endif
 
 bool AdminServiceImpl::authorize(const grpc::ServerContext* context,
@@ -91,6 +97,9 @@ grpc::Status AdminServiceImpl::RunCleanup(grpc::ServerContext* context, const pr
                                 "updated_at<" + std::to_string(now - cleanup_options_.message_receipt_retention_ms) +
                                     " LIMIT " + std::to_string(batch_size),
                                 request->dry_run());
+    if (redis_client_ != nullptr) {
+        cleaned_rows += cleanupStaleOnlineDevices(request->dry_run(), batch_size);
+    }
     fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, request->dry_run() ? "DRY_RUN" : "OK");
     response->set_cleaned_rows(cleaned_rows);
 #else
@@ -104,9 +113,35 @@ grpc::Status AdminServiceImpl::GetSystemStats(grpc::ServerContext* context, cons
     if (!authorize(context, request->request_id(), "GetSystemStats", "stats", response->mutable_response())) {
         return grpc::Status::OK;
     }
+#if defined(NEBULA_ENABLE_STORAGE)
+    if (redis_client_ == nullptr) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::SERVICE_UNAVAILABLE, "admin redis backend is not configured");
+        return grpc::Status::OK;
+    }
+    uint64_t online_users = 0;
+    uint64_t active_connections = 0;
+    for (const auto& devices_key : redis_client_->scan("nebula:user:devices:*", 1000)) {
+        bool user_online = false;
+        std::string prefix = "nebula:user:devices:";
+        if (devices_key.rfind(prefix, 0) != 0) continue;
+        std::string user_id = devices_key.substr(prefix.size());
+        for (const auto& device_id : redis_client_->smembers(devices_key)) {
+            if (redis_client_->exists("nebula:user:online:" + user_id + ":" + device_id) &&
+                redis_client_->exists("nebula:user:conn:" + user_id + ":" + device_id)) {
+                ++active_connections;
+                user_online = true;
+            }
+        }
+        if (user_online) ++online_users;
+    }
+    fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
+    response->set_online_users(online_users);
+    response->set_active_connections(active_connections);
+#else
     fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
     response->set_online_users(0);
     response->set_active_connections(0);
+#endif
     return grpc::Status::OK;
 }
 
@@ -160,7 +195,27 @@ grpc::Status AdminServiceImpl::GetKafkaLagInfo(grpc::ServerContext* context, con
     if (!authorize(context, request->request_id(), "GetKafkaLagInfo", "kafka", response->mutable_response())) {
         return grpc::Status::OK;
     }
-    fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "MOCKED");
+#if defined(NEBULA_ENABLE_STORAGE)
+    std::string error;
+    auto records = KafkaConsumer::queryLag(kafka_consumer_config_, kafka_topics_, 3000, &error);
+    if (records.empty() && !error.empty()) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::SERVICE_UNAVAILABLE, "kafka lag query failed: " + error);
+        return grpc::Status::OK;
+    }
+    std::unordered_map<std::string, int64_t> topic_lag;
+    for (const auto& record : records) {
+        topic_lag[record.topic] += record.lag;
+    }
+    for (const auto& item : topic_lag) {
+        auto* lag = response->add_lags();
+        lag->set_topic(item.first);
+        lag->set_consumer_group(kafka_consumer_config_.group_id);
+        lag->set_lag(item.second);
+    }
+    fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
+#else
+    fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "storage backend disabled");
+#endif
     return grpc::Status::OK;
 }
 
@@ -184,6 +239,10 @@ grpc::Status AdminServiceImpl::HealthCheck(grpc::ServerContext* context, const p
         status.addDependency({"redis", redis_client_->ping() ? HealthState::SERVING : HealthState::NOT_SERVING,
                               redis_client_->lastError()});
     }
+    std::string kafka_error;
+    auto lags = KafkaConsumer::queryLag(kafka_consumer_config_, kafka_topics_, 3000, &kafka_error);
+    status.addDependency({"kafka", kafka_error.empty() ? HealthState::SERVING : HealthState::NOT_SERVING,
+                          kafka_error.empty() ? "metadata and offsets query ok, partitions=" + std::to_string(lags.size()) : kafka_error});
 #endif
     response->set_state(HealthStatus::toString(status.overall()));
     for (const auto& dependency : status.dependencies()) {
@@ -218,6 +277,29 @@ uint64_t AdminServiceImpl::cleanupRows(MySqlConnection& conn,
         return 0;
     }
     return conn.affectedRows();
+}
+
+uint64_t AdminServiceImpl::cleanupStaleOnlineDevices(bool dry_run, int batch_size) const {
+    if (redis_client_ == nullptr || batch_size <= 0) return 0;
+    uint64_t cleaned = 0;
+    const std::string prefix = "nebula:user:devices:";
+    for (const auto& devices_key : redis_client_->scan(prefix + "*", static_cast<size_t>(batch_size))) {
+        if (devices_key.rfind(prefix, 0) != 0) continue;
+        const std::string user_id = devices_key.substr(prefix.size());
+        for (const auto& device_id : redis_client_->smembers(devices_key)) {
+            const std::string online_key = "nebula:user:online:" + user_id + ":" + device_id;
+            const std::string conn_key = "nebula:user:conn:" + user_id + ":" + device_id;
+            if (redis_client_->exists(online_key) && redis_client_->exists(conn_key)) continue;
+            ++cleaned;
+            if (!dry_run) {
+                redis_client_->del(online_key);
+                redis_client_->del(conn_key);
+                redis_client_->srem(devices_key, device_id);
+            }
+            if (cleaned >= static_cast<uint64_t>(batch_size)) return cleaned;
+        }
+    }
+    return cleaned;
 }
 #endif
 

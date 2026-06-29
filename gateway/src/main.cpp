@@ -64,8 +64,8 @@ int main(int argc, char* argv[]) {
     return 0;
 #else
     std::string config_path = argc > 1 ? argv[1] : "../config/nebula.conf";
-    std::cout << "nebula_gateway placeholder ready, config=" << config_path << std::endl;
-    std::cout << "Gateway TCP/gRPC requires Linux, gRPC and storage dependencies" << std::endl;
+    std::cout << "nebula_gateway not started, config=" << config_path << std::endl;
+    std::cout << "Gateway TCP/gRPC requires Linux, gRPC, and storage dependencies" << std::endl;
     return 0;
 #endif
 }

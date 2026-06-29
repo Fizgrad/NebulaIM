@@ -30,32 +30,55 @@ void PushWorker::run() {
         KafkaMessage message = consumer_->poll(options_.poll_timeout_ms);
         if (!running_) break;
         if (!message.valid) continue;
-        handleKafkaMessage(message);
+        LOG_INFO("PushWorker polled topic=" + message.topic +
+                 " partition=" + std::to_string(message.partition) +
+                 " offset=" + std::to_string(message.offset) +
+                 " payload_bytes=" + std::to_string(message.payload.size()));
+        if (handleKafkaMessage(message)) {
+            bool committed = consumer_->commit(message);
+            LOG_INFO("PushWorker handled topic=" + message.topic +
+                     " partition=" + std::to_string(message.partition) +
+                     " offset=" + std::to_string(message.offset) +
+                     " committed=" + (committed ? "true" : "false"));
+        } else {
+            LOG_ERROR("PushWorker message handling failed topic=" + message.topic +
+                      " partition=" + std::to_string(message.partition) +
+                      " offset=" + std::to_string(message.offset));
+        }
     }
 }
 
-void PushWorker::handleKafkaMessage(const KafkaMessage& message) {
+bool PushWorker::handleKafkaMessage(const KafkaMessage& message) {
     proto::MessageData data;
     if (!MessageKafkaPayload::deserializeMessageData(message.payload, &data)) {
-        LOG_ERROR("PushWorker failed to parse Kafka payload topic=" + message.topic);
-        return;
+        LOG_ERROR("PushWorker failed to parse Kafka payload topic=" + message.topic +
+                  " partition=" + std::to_string(message.partition) +
+                  " offset=" + std::to_string(message.offset) +
+                  " payload_bytes=" + std::to_string(message.payload.size()));
+        return true;
     }
-    if (message.topic == options_.topic_single) handleSingleMessage(data);
-    else if (message.topic == options_.topic_group) handleGroupMessage(data);
-    else if (message.topic == options_.topic_retry) handleRetryMessage(data);
+    if (message.topic == options_.topic_single) return handleSingleMessage(data);
+    if (message.topic == options_.topic_group) return handleGroupMessage(data);
+    if (message.topic == options_.topic_retry) return handleRetryMessage(data);
+    return true;
 }
 
-void PushWorker::handleSingleMessage(const proto::MessageData& data) {
-    dispatcher_->pushToUser("kafka-single", data.to_user_id(), data);
+bool PushWorker::handleSingleMessage(const proto::MessageData& data) {
+    return dispatcher_->pushToUser("kafka-single", data.to_user_id(), data);
 }
 
-void PushWorker::handleGroupMessage(const proto::MessageData& data) {
-    dispatcher_->pushToGroup("kafka-group", data.group_id(), data);
+bool PushWorker::handleGroupMessage(const proto::MessageData& data) {
+    PushResult result = dispatcher_->pushToGroup("kafka-group", data.group_id(), data);
+    return result.failed_count == 0;
 }
 
-void PushWorker::handleRetryMessage(const proto::MessageData& data) {
-    if (data.to_user_id() != 0) dispatcher_->pushToUser("kafka-retry", data.to_user_id(), data);
-    else if (data.group_id() != 0) dispatcher_->pushToGroup("kafka-retry", data.group_id(), data);
+bool PushWorker::handleRetryMessage(const proto::MessageData& data) {
+    if (data.to_user_id() != 0) return dispatcher_->pushToUser("kafka-retry", data.to_user_id(), data);
+    if (data.group_id() != 0) {
+        PushResult result = dispatcher_->pushToGroup("kafka-retry", data.group_id(), data);
+        return result.failed_count == 0;
+    }
+    return true;
 }
 
 }  // namespace nebula

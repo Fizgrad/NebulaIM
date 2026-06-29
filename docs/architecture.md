@@ -2,122 +2,105 @@
 
 ## Goal
 
-NebulaIM is a C++17/Linux distributed IM system designed to demonstrate production-oriented backend engineering: epoll/Reactor networking, high-concurrency long connections, gRPC service boundaries, middleware integration, observability, tests, benchmarks, and deployable infrastructure.
+NebulaIM is a C++17/Linux distributed IM system designed to demonstrate production-oriented backend engineering: epoll/Reactor networking, high-concurrency TCP/WebSocket long connections, gRPC service boundaries, MySQL/Redis/Kafka integration, observability, tests, benchmarks, and deployable single-node infrastructure.
 
 ## High-level topology
 
 ```text
-Client
-  |
-  | TCP / WebSocket long connection
-  v
-nebula-gateway
-  |
-  | gRPC / Protobuf
-  v
-+---------------------+
-| nebula-user         |
-| nebula-message      |
-| nebula-relation     |
-| nebula-push         |
-+---------------------+
-  |
-  +--> MySQL
-  +--> Redis
-  +--> Kafka
-  +--> Prometheus / Grafana
+Native Client -> TCP PacketCodec --------------------+
+                                                     v
+Browser -> WebSocket binary frame -> PacketCodec -> Gateway
+                                                     |
+                                                     | bounded gRPC/RpcExecutor
+                                                     v
+       +-------------+  +----------------+  +----------------------+  +-------------+
+       | UserService |  | RelationService|  | ConversationService  |  | MessageSvc  |
+       +-------------+  +----------------+  +----------------------+  +-------------+
+              |                 |                    |                       |
+              +-----------------+--------------------+-----------------------+
+                                      MySQL / Redis
+                                                                  |
+                                                                  | outbox_events
+                                                                  v
+                                                            OutboxWorker -> Kafka
+                                                                               |
+                                                                               v
+                                                                      PushService
+                                                                               |
+                                                                               | GatewayService.DeliverToConnection
+                                                                               v
+                                                                            Gateway
 ```
+
+AdminService provides token-protected health, cleanup, online stats, outbox stats, and Kafka lag for operations. Prometheus/Grafana provide the metrics and dashboard assets.
 
 ## Service responsibilities
 
-### nebula-gateway
+### Gateway
 
-- Accept TCP/WebSocket long connections.
-- Decode client packets and validate protocol headers.
-- Handle heartbeats, connection close, and graceful shutdown.
-- Maintain `user_id -> connection` and `connection_id -> connection` mappings.
-- Forward business requests to backend services through gRPC.
-- Expose gateway push RPCs for `push_service`.
-- Export metrics for connection count, online users, QPS, and latency.
+- Accept native TCP Packet clients and browser WebSocket clients on the same port.
+- Decode PacketCodec frames and validate protocol headers.
+- Handle register/login/heartbeat/message/ACK/offline-pull packets.
+- Dispatch blocking backend gRPC stubs through a bounded `RpcExecutor`.
+- Maintain local connection context, including `device_id`, `platform`, and WebSocket transport flag.
+- Write Redis online state using multi-device keys only.
+- Expose `GatewayService` for PushService and wrap push packets correctly for TCP or WebSocket connections.
 
-### nebula-user
+### UserService
 
 - Register users.
-- Login users.
-- Validate password hashes.
-- Generate and validate tokens.
+- Login users with password hashing.
+- Generate, validate, refresh, and delete tokens.
+- Persist/update device metadata.
 - Query user profiles.
 
-### nebula-message
-
-- Process single and group messages.
-- Generate message IDs.
-- Persist message records.
-- Store and pull offline messages.
-- Process ACK, deduplication, retry, and ordering rules.
-- Produce and consume Kafka messages.
-
-### nebula-relation
+### RelationService
 
 - Manage friendships.
+- Manage friend request send/accept/reject/list flow.
 - Manage groups and group members.
-- Validate whether a user can send group messages.
 
-### nebula-push
+### ConversationService
 
-- Consume Kafka delivery events.
-- Query Redis online status.
-- Push to online users through gateway.
+- List conversations.
+- Mark conversations read.
+- Delete/pin/mute conversation views.
+
+### MessageService
+
+- Process single and group messages.
+- Generate message IDs and conversation IDs.
+- Deduplicate client retries.
+- Persist messages and update conversations.
+- Insert outbox events in the same transaction as message send.
+- Mark delivered/read states.
+- Recall messages with permission and time-window checks, committing recall state and recall event together.
+
+### PushService
+
+- Consume Kafka delivery events with auto commit disabled.
+- Check Redis multi-device online state.
+- Push online messages through GatewayService.
 - Write offline messages for offline users.
 - Send failed deliveries to retry topic and DLQ.
+- Commit Kafka offsets only after handling succeeds.
 
-### nebula-common
+### AdminService
 
-Shared library modules:
-
-- log
-- config
-- thread
-- net
-- db
-- redis
-- kafka
-- monitor
-- utils
-
-## Client protocol
-
-The client-to-gateway binary protocol will use a fixed header followed by a Protobuf body:
-
-```cpp
-struct PacketHeader {
-    uint32_t magic;
-    uint16_t version;
-    uint16_t type;
-    uint32_t sequence_id;
-    uint32_t body_length;
-};
-```
-
-Gateway must validate `magic` and maximum `body_length` before decoding the Protobuf payload.
+- Authenticate scoped SHA-256 admin tokens through gRPC metadata.
+- Run bounded cleanup.
+- Report dependency health, online stats, outbox stats, and Kafka lag.
 
 ## Data responsibilities
 
-- MySQL persists users, friendships, groups, group members, messages, and offline messages.
-- Redis stores token mappings, online status, connection mappings, rate limits, recent sessions, and deduplication keys.
-- Kafka decouples message send, group fanout, offline delivery, retry, and DLQ paths.
+- MySQL persists users, devices, friend requests, friendships, groups, group members, messages, conversations, receipts, offline messages, outbox events, and schema migration state.
+- Redis stores tokens, multi-device online state, rate limits, recent sessions, retry counters, and deduplication keys with TTL.
+- Kafka decouples message delivery, group fanout, retry, and DLQ paths.
 
-## Phase 1 scope
+## Reliability boundaries
 
-This phase only creates a buildable skeleton:
-
-- repository directories
-- top-level CMake
-- service CMake files
-- minimal service `main.cpp` files
-- initial README and architecture docs
-- Docker Compose dependencies
-- MySQL initialization SQL
-- Prometheus configuration
-
-No business logic, network library, protocol codec, gRPC codegen, or storage client implementation is included in Phase 1.
+- Gateway does not write MySQL and does not consume Kafka.
+- MessageService does not push directly to clients.
+- Outbox makes MySQL the authoritative local transaction and Kafka publication eventually consistent.
+- PushService manual commit reduces consumer-side message loss windows.
+- `health_check.sh` and `wait_ready.sh` provide single-node semantic readiness checks.

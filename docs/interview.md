@@ -4,7 +4,7 @@ NebulaIM is a C++17 distributed IM system with custom epoll/Reactor networking, 
 
 ## Message Flow
 
-Client logs in through Gateway, Gateway writes Redis online state, client sends message, MessageService persists MySQL and publishes Kafka, PushService consumes Kafka, checks Redis online state, calls Gateway RPC, Gateway writes PUSH_MSG to TCP connection.
+Client logs in through Gateway, Gateway writes multi-device Redis online state, client sends message, MessageService persists MySQL/conversation/outbox in one transaction, OutboxWorker publishes Kafka, PushService consumes Kafka with manual commit, checks Redis online state, calls Gateway RPC, and Gateway writes `PUSH_MSG` as raw TCP Packet or WebSocket binary frame.
 
 ## High Frequency Q&A
 
@@ -17,9 +17,11 @@ Client logs in through Gateway, Gateway writes Redis online state, client sends 
 7. Online status? Redis keys with TTL.
 8. Kafka role? Async delivery, decoupling, peak shaving.
 9. Ordering? Kafka key by conversation_id.
-10. MySQL success Kafka fail? Use Outbox Pattern later.
+10. MySQL success Kafka fail? Outbox Pattern commits publish intent with the message and retries Kafka asynchronously.
 11. Dedup? client_sequence_id stored in Redis.
 12. ACK idempotent? Retries are common.
 13. Large groups? Async sharded fanout.
-14. P99 optimization? Reduce blocking, tune DB/Kafka, async RPC.
-15. Production gaps? TLS, auth hardening, tracing, HA, K8s, CI/CD.
+14. P99 optimization? Reduce blocking, tune DB/Kafka, bound Gateway RPC queues, inspect Kafka lag and outbox backlog.
+15. Kafka message loss window? PushService disables auto commit and commits offsets only after delivery/offline/retry/DLQ handling succeeds.
+16. Browser access? WebSocket binary frames carry the same PacketCodec bytes; use the Web SDK instead of JSON frames.
+17. Production gaps? Native Gateway TLS, distributed service discovery backend, full tracing backend, HA/K8s, CI/CD, E2EE.

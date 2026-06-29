@@ -118,10 +118,11 @@ add_executable(test_grpc_tls_config test_grpc_tls_config.cpp)
 target_link_libraries(test_grpc_tls_config PRIVATE nebula_common)
 add_test(NAME test_grpc_tls_config COMMAND test_grpc_tls_config WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
-add_executable(test_backend_final_e2e test_backend_final_e2e.cpp)
-add_test(NAME test_backend_final_e2e COMMAND test_backend_final_e2e WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
-
 if(NEBULA_ENABLE_GRPC)
+    add_executable(test_backend_final_e2e test_backend_final_e2e.cpp)
+    target_link_libraries(test_backend_final_e2e PRIVATE nebula_common nebula_proto ${NEBULA_GRPC_LIB} ${NEBULA_PROTOBUF_LIB})
+    add_test(NAME test_backend_final_e2e COMMAND test_backend_final_e2e WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
     add_executable(test_protobuf_message test_protobuf_message.cpp)
     target_link_libraries(test_protobuf_message PRIVATE nebula_proto ${NEBULA_PROTOBUF_LIB})
     add_test(NAME test_protobuf_message COMMAND test_protobuf_message WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
