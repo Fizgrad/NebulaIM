@@ -27,7 +27,7 @@ push_service
 
 admin clients
   | gRPC metadata x-nebula-admin-token
-  +--> admin_service     : HealthCheck, cleanup, online stats, outbox stats, Kafka lag
+  +--> admin_service     : HealthCheck, cleanup, online stats, outbox stats, Kafka lag, config validation, service overview, audit query
 ```
 
 ## Proto files
@@ -38,7 +38,7 @@ admin clients
 - `relation.proto`: `RelationService` friend and group APIs.
 - `conversation.proto`: `ConversationService` list/read/delete/pin/mute APIs.
 - `device.proto`: device management contracts.
-- `admin.proto`: internal admin health, cleanup, and stats APIs.
+- `admin.proto`: internal admin health, cleanup, stats, Kafka lag, config validation, service overview, and audit APIs.
 - `push.proto`: `PushService` user/group push APIs.
 - `gateway.proto`: `GatewayService` backend-to-gateway delivery APIs.
 
@@ -73,6 +73,8 @@ gRPC C++ packages vary by distribution. If `find_package(gRPC REQUIRED)` cannot 
 Client-to-gateway native TCP uses NebulaIM `PacketCodec` for framing. Browser clients use WebSocket binary frames whose payload is the same PacketCodec byte stream. The packet body is an opaque binary string containing serialized Protobuf for business request/response types.
 
 Gateway wraps blocking backend gRPC calls with `RpcExecutor` so EventLoop threads do not wait on synchronous stubs. The executor queue is bounded, so overload returns `SERVICE_UNAVAILABLE` instead of unbounded task growth. A future optimization can replace this wrapper with native gRPC async completion queues.
+
+Trace IDs are propagated through gRPC metadata key `x-nebula-trace-id`. Admin RPCs are authenticated with `x-nebula-admin-token`.
 
 PushService uses gRPC `GatewayService.DeliverToConnection` for online delivery. Gateway checks whether the target connection is native TCP or WebSocket and writes either raw Packet bytes or a WebSocket binary frame.
 

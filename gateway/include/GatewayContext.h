@@ -10,6 +10,8 @@
 #include "common/protocol/PacketCodec.h"
 #include "common/redis/RedisClient.h"
 #include "common/rpc/GrpcTlsCredentials.h"
+#include "common/tls/TlsConfig.h"
+#include "common/tls/TlsContext.h"
 
 #include <memory>
 #include <string>
@@ -27,6 +29,7 @@ struct GatewayOptions {
     int rpc_port = 50055;
     int heartbeat_timeout_ms = 30000;
     int online_ttl_seconds = 60;
+    TlsConfig tcp_tls;
     std::string user_service_addr = "127.0.0.1:50051";
     std::string message_service_addr = "127.0.0.1:50052";
     std::string relation_service_addr = "127.0.0.1:50053";
@@ -52,6 +55,7 @@ public:
     int tcpListenPort() const;
     std::string rpcListenAddress() const;
     const GrpcTlsConfig& grpcTlsConfig() const;
+    std::shared_ptr<TlsContext> tcpTlsContext() const;
 
 private:
     Config config_;
@@ -65,6 +69,7 @@ private:
     std::unique_ptr<PacketCodec> codec_;
     std::unique_ptr<RpcExecutor> rpc_executor_;
     GrpcTlsConfig grpc_tls_config_;
+    std::shared_ptr<TlsContext> tcp_tls_context_;
 };
 
 }  // namespace nebula

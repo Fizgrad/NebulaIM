@@ -19,6 +19,8 @@ NebulaIM Packet body = Protobuf bytes
 
 Gateway does not accept JSON text frames for business traffic.
 
+TLS is also a transport wrapper. Whether Gateway traffic arrives as plaintext TCP/WebSocket, Nginx-terminated TLS, or native Gateway TLS, the application payload after decryption is still the same PacketCodec byte stream.
+
 ## Sticky and partial packets
 
 - Sticky packet: one Buffer contains multiple complete packets.

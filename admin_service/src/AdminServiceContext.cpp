@@ -1,16 +1,40 @@
 #include "AdminServiceContext.h"
 
 #include "common/log/Logger.h"
+#include "common/trace/TraceManager.h"
 
 namespace nebula {
 
 bool AdminServiceContext::init(const std::string& config_path) {
     if (!config_.loadFromFile(config_path)) return false;
+    TraceManager::instance().configure(TraceManager::configFrom(config_, "nebula-admin-service"));
     std::string host = config_.getString("admin_service.host", "0.0.0.0");
     int port = config_.getInt("admin_service.port", 50057);
     listen_address_ = host + ":" + std::to_string(port);
     admin_auth_ = AdminAuth::fromConfig(config_);
     grpc_tls_config_ = GrpcTlsCredentials::fromConfig(config_);
+    runtime_config_.admin_auth_enabled = admin_auth_.enabled();
+    runtime_config_.grpc_tls_enabled = grpc_tls_config_.enabled;
+    runtime_config_.gateway_tls_enabled = config_.getBool("gateway.tls.enabled", false);
+    runtime_config_.trace_enabled = config_.getBool("trace.enabled", false);
+    runtime_config_.trace_otlp_endpoint = config_.getString("trace.otlp_endpoint", "");
+    runtime_config_.gateway_tcp_host = config_.getString("gateway.tcp.host", "127.0.0.1");
+    runtime_config_.gateway_tcp_port = config_.getInt("gateway.tcp.port", 9000);
+    runtime_config_.mysql_host = config_.getString("mysql.host", "127.0.0.1");
+    runtime_config_.mysql_password = config_.getString("mysql.password", "");
+    runtime_config_.redis_host = config_.getString("redis.host", "127.0.0.1");
+    runtime_config_.redis_password = config_.getString("redis.password", "");
+    runtime_config_.kafka_brokers = config_.getString("kafka.brokers", "127.0.0.1:9092");
+    runtime_config_.service_addresses = {
+        {"gateway-tcp", runtime_config_.gateway_tcp_host + ":" + std::to_string(runtime_config_.gateway_tcp_port)},
+        {"gateway-rpc", config_.getString("gateway.rpc.host", "127.0.0.1") + ":" + std::to_string(config_.getInt("gateway.rpc.port", 50055))},
+        {"user-service", config_.getString("user_service.host", "127.0.0.1") + ":" + std::to_string(config_.getInt("user_service.port", 50051))},
+        {"relation-service", config_.getString("relation_service.host", "127.0.0.1") + ":" + std::to_string(config_.getInt("relation_service.port", 50053))},
+        {"conversation-service", config_.getString("conversation_service.host", "127.0.0.1") + ":" + std::to_string(config_.getInt("conversation_service.port", 50056))},
+        {"message-service", config_.getString("message_service.host", "127.0.0.1") + ":" + std::to_string(config_.getInt("message_service.port", 50052))},
+        {"push-service", config_.getString("push_service.host", "127.0.0.1") + ":" + std::to_string(config_.getInt("push_service.port", 50054))},
+        {"admin-service", host + ":" + std::to_string(port)},
+    };
     cleanup_options_.outbox_published_retention_ms = config_.getInt64("admin.cleanup.outbox_published_retention_ms", cleanup_options_.outbox_published_retention_ms);
     cleanup_options_.offline_delivered_retention_ms = config_.getInt64("admin.cleanup.offline_delivered_retention_ms", cleanup_options_.offline_delivered_retention_ms);
     cleanup_options_.friend_request_retention_ms = config_.getInt64("admin.cleanup.friend_request_retention_ms", cleanup_options_.friend_request_retention_ms);
@@ -68,6 +92,10 @@ const GrpcTlsConfig& AdminServiceContext::grpcTlsConfig() const {
 
 const AdminCleanupOptions& AdminServiceContext::cleanupOptions() const {
     return cleanup_options_;
+}
+
+const AdminRuntimeConfig& AdminServiceContext::runtimeConfig() const {
+    return runtime_config_;
 }
 
 #if defined(NEBULA_ENABLE_STORAGE)

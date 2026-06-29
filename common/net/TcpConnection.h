@@ -7,11 +7,14 @@
 #include <memory>
 #include <string>
 
+using ssl_st = struct ssl_st;
+
 namespace nebula {
 
 class Channel;
 class EventLoop;
 class Socket;
+class TlsContext;
 
 class TcpConnection : public std::enable_shared_from_this<TcpConnection> {
 public:
@@ -25,7 +28,8 @@ public:
                   std::string name,
                   int sockfd,
                   const InetAddress& local_addr,
-                  const InetAddress& peer_addr);
+                  const InetAddress& peer_addr,
+                  std::shared_ptr<TlsContext> tls_context = nullptr);
 
     ~TcpConnection();
 
@@ -68,6 +72,9 @@ private:
     void handleError();
 
     void sendInLoop(const char* data, size_t len);
+    bool doTlsHandshake();
+    void handleTlsRead();
+    void handleTlsWrite();
     void shutdownInLoop();
     void forceCloseInLoop();
 
@@ -78,6 +85,9 @@ private:
 
     std::unique_ptr<Socket> socket_;
     std::unique_ptr<Channel> channel_;
+    std::shared_ptr<TlsContext> tls_context_;
+    ssl_st* ssl_ = nullptr;
+    bool tls_handshake_done_ = false;
 
     InetAddress local_addr_;
     InetAddress peer_addr_;

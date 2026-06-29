@@ -12,6 +12,10 @@ Use scoped admin tokens for operations: `health`, `stats`, `outbox`, `kafka`, `c
 
 For service-to-service encryption, set `grpc.tls.enabled=true` and configure CA, server cert/key, optional client cert/key, `grpc.tls.require_client_auth`, and `grpc.tls.target_name_override`. Confirm every service has readable PEM files before restart.
 
+For direct Gateway TLS, set `gateway.tls.enabled=true`, `gateway.tls.cert_path`, and `gateway.tls.key_path`; otherwise verify Nginx/Envoy is the only public TLS entrypoint.
+
+For tracing, decide whether `trace.enabled=true` should be used on this host and verify Jaeger/OTLP is reachable at `trace.otlp_endpoint`.
+
 Review `admin.cleanup.*` retention windows and `admin.cleanup.batch_size`. `RunCleanup` deletes published outbox rows, delivered offline rows, handled friend requests, old message receipts, and stale Redis online device members in bounded batches.
 
 ## MySQL
@@ -34,11 +38,11 @@ Validate TCP login, WebSocket handshake, WebSocket push delivery, heartbeat, pac
 
 Validate service discovery entries and circuit breaker behavior before putting Gateway behind a load balancer.
 
-Terminate public TCP/WebSocket TLS at the edge unless native Gateway socket TLS has been added and pressure-tested. Review the Nginx WebSocket Origin allowlist, per-IP connection limits, request rate limits, and request ID forwarding.
+Terminate public TCP/WebSocket TLS at the edge or enable native Gateway TLS. Review the Nginx WebSocket Origin allowlist, per-IP connection limits, request rate limits, and request ID forwarding.
 
 ## Monitoring
 
-Check Prometheus scrape targets, Grafana dashboards, service metrics endpoints, AdminService `HealthCheck`, `GetSystemStats`, `GetOutboxStats`, `GetKafkaLagInfo`, and alert thresholds.
+Check Prometheus scrape targets, Grafana dashboards, Jaeger UI, OTLP endpoint, service metrics endpoints, AdminService `HealthCheck`, `GetSystemStats`, `GetOutboxStats`, `GetKafkaLagInfo`, `GetServiceOverview`, `ValidateConfig`, and alert thresholds.
 
 ## Logs
 

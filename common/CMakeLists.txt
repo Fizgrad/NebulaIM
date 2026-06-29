@@ -46,6 +46,11 @@ set(NEBULA_COMMON_SOURCES
     circuitbreaker/CircuitBreakerManager.cpp
     trace/TraceId.cpp
     trace/TraceContext.cpp
+    trace/TraceSpan.cpp
+    trace/TraceManager.cpp
+    trace/OtlpTraceExporter.cpp
+    tls/TlsConfig.cpp
+    tls/TlsContext.cpp
     discovery/StaticServiceResolver.cpp
     health/HealthStatus.cpp
     security/AdminAuth.cpp
@@ -123,9 +128,9 @@ target_link_libraries(nebula_common
 )
 
 if(OpenSSL_FOUND)
-    target_link_libraries(nebula_common PUBLIC OpenSSL::Crypto)
+    target_link_libraries(nebula_common PUBLIC OpenSSL::Crypto OpenSSL::SSL)
 else()
-    message(FATAL_ERROR "OpenSSL::Crypto not found. Install libssl-dev.")
+    message(FATAL_ERROR "OpenSSL not found. Install libssl-dev.")
 endif()
 
 if(NEBULA_ENABLE_STORAGE)

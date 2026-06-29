@@ -81,6 +81,21 @@ check_tcp() {
     fi
 }
 
+check_tls() {
+    local name="$1"
+    local host="$2"
+    local port="$3"
+    if command -v openssl >/dev/null 2>&1 && timeout 3 openssl s_client -connect "${host}:${port}" -servername "${host}" </dev/null >/dev/null 2>&1; then
+        echo "[health][OK] ${name} tls ${host}:${port}"
+    elif command -v openssl >/dev/null 2>&1; then
+        echo "[health][FAIL] ${name} tls ${host}:${port}" >&2
+        return 1
+    else
+        echo "[health][WARN] openssl missing, falling back to tcp check for ${name}"
+        check_tcp "${name}" "${host}" "${port}"
+    fi
+}
+
 check_mysql() {
     if mysql_cmd --batch --skip-column-names -e "SELECT 1" >/dev/null 2>&1; then
         echo "[health][OK] mysql query"
@@ -135,7 +150,11 @@ check_redis || failures=$((failures + 1))
 check_kafka || failures=$((failures + 1))
 check_outbox || failures=$((failures + 1))
 
-check_tcp gateway "$(get_cfg gateway.tcp.host 127.0.0.1)" "$(get_cfg gateway.tcp.port 9000)" || failures=$((failures + 1))
+if [[ "$(get_cfg gateway.tls.enabled false)" =~ ^(true|1|yes|on)$ ]]; then
+    check_tls gateway "$(get_cfg gateway.tcp.host 127.0.0.1)" "$(get_cfg gateway.tcp.port 9000)" || failures=$((failures + 1))
+else
+    check_tcp gateway "$(get_cfg gateway.tcp.host 127.0.0.1)" "$(get_cfg gateway.tcp.port 9000)" || failures=$((failures + 1))
+fi
 check_tcp gateway-rpc "$(get_cfg gateway.rpc.host 127.0.0.1)" "$(get_cfg gateway.rpc.port 50055)" || failures=$((failures + 1))
 check_tcp user-service "$(get_cfg user_service.host 127.0.0.1)" "$(get_cfg user_service.port 50051)" || failures=$((failures + 1))
 check_tcp message-service "$(get_cfg message_service.host 127.0.0.1)" "$(get_cfg message_service.port 50052)" || failures=$((failures + 1))

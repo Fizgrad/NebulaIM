@@ -56,6 +56,10 @@ void TcpServer::setThreadNum(int num_threads) {
     thread_pool_->setThreadNum(num_threads);
 }
 
+void TcpServer::setTlsContext(std::shared_ptr<TlsContext> tls_context) {
+    tls_context_ = std::move(tls_context);
+}
+
 void TcpServer::setConnectionCallback(ConnectionCallback cb) {
     connection_callback_ = std::move(cb);
 }
@@ -86,7 +90,7 @@ void TcpServer::newConnection(int sockfd, const InetAddress& peer_addr) {
     std::string conn_name = name_ + "-conn-" + std::to_string(next_conn_id_++);
     InetAddress local_addr = getLocalAddress(sockfd);
 
-    auto conn = std::make_shared<TcpConnection>(io_loop, conn_name, sockfd, local_addr, peer_addr);
+    auto conn = std::make_shared<TcpConnection>(io_loop, conn_name, sockfd, local_addr, peer_addr, tls_context_);
     connections_[conn_name] = conn;
     conn->setConnectionCallback(connection_callback_);
     conn->setMessageCallback(message_callback_);

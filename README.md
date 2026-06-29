@@ -23,7 +23,7 @@ MessageService --> MySQL(messages + conversations + outbox_events)
                     OutboxWorker --> Kafka --> PushService -- GatewayService.DeliverToConnection --> Gateway
 
 UserService / RelationService / ConversationService --> MySQL / Redis
-AdminService --> health / cleanup / online stats / outbox stats / Kafka lag
+AdminService --> health / cleanup / online stats / outbox stats / Kafka lag / config validation / audit
 ```
 
 ## Highlights
@@ -37,7 +37,7 @@ AdminService --> health / cleanup / online stats / outbox stats / Kafka lag
 7. MySQL persistence for users, relations, groups, messages, offline messages.
 8. Redis for token, online state, dedup, retry.
 9. Prometheus/Grafana monitoring assets.
-10. WebSocket Gateway, bounded async Gateway backend RPC executor, rate limiter, circuit breaker primitives, trace ID context, migration scripts, health/readiness scripts, Web SDK, and benchmark tools.
+10. WebSocket Gateway, optional native Gateway TLS, bounded async Gateway backend RPC executor, rate limiter, circuit breaker primitives, trace ID + OTLP/Jaeger tracing, migration scripts, health/readiness scripts, Web SDK, and benchmark tools.
 
 ## Quick Start
 
@@ -113,6 +113,8 @@ cmake --build . -j
 | AdminService | 50057 |
 | Prometheus | 9090 |
 | Grafana | 3000 |
+| Jaeger UI | 16686 |
+| OTLP HTTP | 4318 |
 | MySQL | 3306 |
 | Redis | 6379 |
 | Kafka | 9092 |
@@ -152,7 +154,8 @@ PushService 9104
 | Service discovery | Static resolver abstraction for Gateway/Push clients |
 | Admin security | Scoped SHA-256 admin tokens, metadata auth, audit logs, HealthCheck, real online stats, outbox stats, and Kafka lag |
 | gRPC TLS/mTLS | Config-driven server/client credentials; disabled by default for local dev |
-| Trace ID | TraceId/TraceContext plus gRPC metadata propagation; not used as Prometheus labels |
+| Gateway native TLS | Optional TLS for the TCP/WebSocket Gateway listener through `gateway.tls.*`; edge TLS via Nginx remains supported |
+| Tracing | TraceId/TraceContext, span wrapper, lightweight OTLP/HTTP exporter, Jaeger Compose service; trace IDs are not Prometheus labels |
 | Database migration | `deploy/mysql/migration/V*.sql` plus locked/backup-aware `scripts/migrate_db.sh` |
 | Production readiness | `health_check.sh`, `wait_ready.sh`, systemd ExecStartPre checks, and Nginx WebSocket hardening |
 | Browser SDK | `web_sdk/nebulaim.js` wraps WebSocket binary Packet + protobuf calls |
@@ -190,6 +193,8 @@ NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e
 - `docs/reliability_design.md`
 - `docs/security_design.md`
 - `docs/production_checklist.md`
+- `docs/tracing.md`
+- `docs/admin_operations.md`
 - `docs/single_node_production.md`
 - `docs/final_architecture.md`
 - `docs/deployment.md`
@@ -205,7 +210,7 @@ NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e
 
 ## Current Limits
 
-Still not implemented: native TLS inside the TCP/WebSocket Gateway listener, real distributed service discovery cluster backend, Kubernetes Operator, full Jaeger/OpenTelemetry tracing backend, identity-provider backed admin console, end-to-end encryption, multi-region deployment, and native gRPC completion-queue clients. For internet-facing TCP/WebSocket traffic, terminate TLS at a load balancer/Nginx/Envoy or add native TLS to the Gateway socket layer.
+Still not implemented: real distributed service discovery cluster backend, Kubernetes Operator, full OpenTelemetry SDK features such as baggage/context propagation beyond trace IDs, identity-provider backed admin console, end-to-end encryption, multi-region deployment, and native gRPC completion-queue clients. For internet-facing TCP/WebSocket traffic, either terminate TLS at Nginx/Envoy or enable native Gateway TLS with `gateway.tls.enabled=true`.
 
 ## License
 

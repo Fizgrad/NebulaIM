@@ -7,6 +7,7 @@
 #include "common/net/TcpConnection.h"
 #include "common/rpc/RpcMetadata.h"
 #include "common/trace/TraceContext.h"
+#include "common/trace/TraceSpan.h"
 #include "message.pb.h"
 #include "user.pb.h"
 
@@ -100,6 +101,9 @@ void GatewayRouter::handleRegister(const TcpConnectionPtr& conn, const std::stri
         return;
     }
     TraceContext::ensureTraceId(req.request_id());
+    TraceSpan span("gateway.Register", TraceSpanKind::SERVER);
+    span.setAttribute("request_id", req.request_id());
+    span.setAttribute("connection_id", connection_id);
     if (rpc_executor_ != nullptr) {
         struct RegisterResult {
             proto::RegisterResponse resp;
@@ -161,6 +165,10 @@ void GatewayRouter::handleLogin(const TcpConnectionPtr& conn, const std::string&
         return;
     }
     TraceContext::ensureTraceId(req.request_id());
+    TraceSpan span("gateway.Login", TraceSpanKind::SERVER);
+    span.setAttribute("request_id", req.request_id());
+    span.setAttribute("connection_id", connection_id);
+    span.setAttribute("device_id", req.device_id().empty() ? connection_id : req.device_id());
     if (rpc_executor_ != nullptr) {
         struct LoginResult {
             proto::LoginResponse resp;
@@ -250,6 +258,11 @@ void GatewayRouter::handleSendSingleMessage(const TcpConnectionPtr& conn, const 
     if (!rate_limiter_.allowMessage(auth->user_id)) { sendError(conn, packet.sequence_id, static_cast<int>(ErrorCode::RATE_LIMITED), "message rate limited", req.request_id()); return; }
     if (!circuit_breakers_.allowRequest("message_service")) { sendError(conn, packet.sequence_id, static_cast<int>(ErrorCode::CIRCUIT_OPEN), "message service circuit open", req.request_id()); return; }
     TraceContext::ensureTraceId(req.request_id());
+    TraceSpan span("gateway.SendSingleMessage", TraceSpanKind::SERVER);
+    span.setAttribute("request_id", req.request_id());
+    span.setAttribute("connection_id", connection_id);
+    span.setAttribute("from_user_id", std::to_string(req.from_user_id()));
+    span.setAttribute("to_user_id", std::to_string(req.to_user_id()));
     if (rpc_executor_ != nullptr) {
         struct RpcResult {
             proto::SendSingleMessageResponse resp;
@@ -304,6 +317,11 @@ void GatewayRouter::handleSendGroupMessage(const TcpConnectionPtr& conn, const s
     if (!rate_limiter_.allowMessage(auth->user_id)) { sendError(conn, packet.sequence_id, static_cast<int>(ErrorCode::RATE_LIMITED), "message rate limited", req.request_id()); return; }
     if (!circuit_breakers_.allowRequest("message_service")) { sendError(conn, packet.sequence_id, static_cast<int>(ErrorCode::CIRCUIT_OPEN), "message service circuit open", req.request_id()); return; }
     TraceContext::ensureTraceId(req.request_id());
+    TraceSpan span("gateway.SendGroupMessage", TraceSpanKind::SERVER);
+    span.setAttribute("request_id", req.request_id());
+    span.setAttribute("connection_id", connection_id);
+    span.setAttribute("from_user_id", std::to_string(req.from_user_id()));
+    span.setAttribute("group_id", std::to_string(req.group_id()));
     if (rpc_executor_ != nullptr) {
         struct RpcResult {
             proto::SendGroupMessageResponse resp;

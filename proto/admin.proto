@@ -10,6 +10,9 @@ service AdminService {
   rpc GetOutboxStats(GetOutboxStatsRequest) returns (GetOutboxStatsResponse);
   rpc GetKafkaLagInfo(GetKafkaLagInfoRequest) returns (GetKafkaLagInfoResponse);
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc ValidateConfig(ValidateConfigRequest) returns (ValidateConfigResponse);
+  rpc GetServiceOverview(GetServiceOverviewRequest) returns (GetServiceOverviewResponse);
+  rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
 }
 
 message RunCleanupRequest {
@@ -73,4 +76,55 @@ message HealthCheckResponse {
   CommonResponse response = 1;
   string state = 2;
   repeated DependencyHealth dependencies = 3;
+}
+
+message ValidateConfigRequest {
+  string request_id = 1;
+}
+
+message ConfigIssue {
+  string severity = 1;
+  string key = 2;
+  string message = 3;
+}
+
+message ValidateConfigResponse {
+  CommonResponse response = 1;
+  repeated ConfigIssue issues = 2;
+}
+
+message GetServiceOverviewRequest {
+  string request_id = 1;
+}
+
+message ServiceOverviewItem {
+  string name = 1;
+  string address = 2;
+  string state = 3;
+  string detail = 4;
+}
+
+message GetServiceOverviewResponse {
+  CommonResponse response = 1;
+  repeated ServiceOverviewItem services = 2;
+}
+
+message ListAuditEventsRequest {
+  string request_id = 1;
+  uint32 limit = 2;
+}
+
+message AdminAuditEvent {
+  int64 timestamp_ms = 1;
+  string request_id = 2;
+  string principal = 3;
+  string action = 4;
+  string scope = 5;
+  string decision = 6;
+  string detail = 7;
+}
+
+message ListAuditEventsResponse {
+  CommonResponse response = 1;
+  repeated AdminAuditEvent events = 2;
 }

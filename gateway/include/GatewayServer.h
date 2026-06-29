@@ -9,10 +9,13 @@
 #include "GatewayRateLimiter.h"
 
 #include <mutex>
+#include <memory>
 #include <string>
 #include <unordered_map>
 
 namespace nebula {
+
+class TlsContext;
 
 class GatewayServer {
 public:
@@ -23,7 +26,8 @@ public:
                   GatewayOnlineManager* online_manager,
                   GatewayRouter* router,
                   int worker_threads,
-                  int heartbeat_timeout_ms);
+                  int heartbeat_timeout_ms,
+                  std::shared_ptr<TlsContext> tls_context = nullptr);
 
     void start();
 

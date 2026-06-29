@@ -24,4 +24,4 @@ Client logs in through Gateway, Gateway writes multi-device Redis online state, 
 14. P99 optimization? Reduce blocking, tune DB/Kafka, bound Gateway RPC queues, inspect Kafka lag and outbox backlog.
 15. Kafka message loss window? PushService disables auto commit and commits offsets only after delivery/offline/retry/DLQ handling succeeds.
 16. Browser access? WebSocket binary frames carry the same PacketCodec bytes; use the Web SDK instead of JSON frames.
-17. Production gaps? Native Gateway TLS, distributed service discovery backend, full tracing backend, HA/K8s, CI/CD, E2EE.
+17. Production gaps? Distributed service discovery backend, full OpenTelemetry SDK semantics, IdP-backed admin console, HA/K8s, CI/CD, E2EE, and multi-region deployment.

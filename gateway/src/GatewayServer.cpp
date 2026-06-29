@@ -23,10 +23,12 @@ GatewayServer::GatewayServer(EventLoop* loop,
                              GatewayOnlineManager* online_manager,
                              GatewayRouter* router,
                              int worker_threads,
-                             int heartbeat_timeout_ms)
+                             int heartbeat_timeout_ms,
+                             std::shared_ptr<TlsContext> tls_context)
     : loop_(loop), server_(loop, listen_addr, "GatewayTcpServer"), gateway_id_(std::move(gateway_id)),
       connection_manager_(connection_manager), online_manager_(online_manager), router_(router), heartbeat_timeout_ms_(heartbeat_timeout_ms) {
     server_.setThreadNum(worker_threads);
+    server_.setTlsContext(std::move(tls_context));
     server_.setConnectionCallback([this](const TcpConnectionPtr& conn) { onConnection(conn); });
     server_.setMessageCallback([this](const TcpConnectionPtr& conn, Buffer* buffer) { onMessage(conn, buffer); });
     if (router_ != nullptr) {

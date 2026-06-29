@@ -4,11 +4,15 @@
 #include "common/net/Channel.h"
 #include "common/net/EventLoop.h"
 #include "common/net/Socket.h"
+#include "common/tls/TlsContext.h"
 
 #include <cerrno>
 #include <cstring>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <utility>
 
 namespace nebula {
 
@@ -16,12 +20,14 @@ TcpConnection::TcpConnection(EventLoop* loop,
                              std::string name,
                              int sockfd,
                              const InetAddress& local_addr,
-                             const InetAddress& peer_addr)
+                             const InetAddress& peer_addr,
+                             std::shared_ptr<TlsContext> tls_context)
     : loop_(loop),
       name_(std::move(name)),
       state_(State::CONNECTING),
       socket_(std::make_unique<Socket>(sockfd)),
       channel_(std::make_unique<Channel>(loop, sockfd)),
+      tls_context_(std::move(tls_context)),
       local_addr_(local_addr),
       peer_addr_(peer_addr) {
     socket_->setKeepAlive(true);
@@ -31,7 +37,12 @@ TcpConnection::TcpConnection(EventLoop* loop,
     channel_->setErrorCallback([this]() { handleError(); });
 }
 
-TcpConnection::~TcpConnection() = default;
+TcpConnection::~TcpConnection() {
+    if (ssl_ != nullptr) {
+        SSL_free(ssl_);
+        ssl_ = nullptr;
+    }
+}
 
 EventLoop* TcpConnection::getLoop() const {
     return loop_;
@@ -94,6 +105,14 @@ void TcpConnection::setCloseCallback(CloseCallback cb) {
 void TcpConnection::connectEstablished() {
     loop_->assertInLoopThread();
     setState(State::CONNECTED);
+    if (tls_context_ && tls_context_->enabled()) {
+        ssl_ = tls_context_->newSsl(channel_->fd());
+        if (ssl_ == nullptr) {
+            LOG_ERROR("failed to create TLS session for " + name_);
+            forceCloseInLoop();
+            return;
+        }
+    }
     channel_->enableReading();
     if (connection_callback_) {
         connection_callback_(shared_from_this());
@@ -118,6 +137,10 @@ void TcpConnection::setState(State state) {
 
 void TcpConnection::handleRead() {
     loop_->assertInLoopThread();
+    if (ssl_ != nullptr) {
+        handleTlsRead();
+        return;
+    }
     int saved_errno = 0;
     ssize_t n = input_buffer_.readFd(channel_->fd(), &saved_errno);
     if (n > 0) {
@@ -135,6 +158,10 @@ void TcpConnection::handleRead() {
 void TcpConnection::handleWrite() {
     loop_->assertInLoopThread();
     if (!channel_->isWriting()) {
+        return;
+    }
+    if (ssl_ != nullptr) {
+        handleTlsWrite();
         return;
     }
 
@@ -186,6 +213,14 @@ void TcpConnection::sendInLoop(const char* data, size_t len) {
     if (state_ == State::DISCONNECTED) {
         return;
     }
+    if (ssl_ != nullptr) {
+        output_buffer_.append(data, len);
+        if (!channel_->isWriting()) {
+            channel_->enableWriting();
+        }
+        handleTlsWrite();
+        return;
+    }
 
     ssize_t nwrote = 0;
     size_t remaining = len;
@@ -219,9 +254,119 @@ void TcpConnection::sendInLoop(const char* data, size_t len) {
     }
 }
 
+bool TcpConnection::doTlsHandshake() {
+    if (ssl_ == nullptr || tls_handshake_done_) return true;
+    int rc = SSL_accept(ssl_);
+    if (rc == 1) {
+        tls_handshake_done_ = true;
+        if (output_buffer_.readableBytes() == 0 && channel_->isWriting()) {
+            channel_->disableWriting();
+        }
+        LOG_INFO("TLS handshake completed for " + name_);
+        return true;
+    }
+    int err = SSL_get_error(ssl_, rc);
+    if (err == SSL_ERROR_WANT_READ) {
+        if (channel_->isWriting()) {
+            channel_->disableWriting();
+        }
+        return false;
+    }
+    if (err == SSL_ERROR_WANT_WRITE) {
+        if (!channel_->isWriting()) {
+            channel_->enableWriting();
+        }
+        return false;
+    }
+    char buffer[256];
+    ERR_error_string_n(ERR_get_error(), buffer, sizeof(buffer));
+    LOG_ERROR("TLS handshake failed for " + name_ + ": " + buffer);
+    handleClose();
+    return false;
+}
+
+void TcpConnection::handleTlsRead() {
+    if (!doTlsHandshake()) return;
+
+    bool got_data = false;
+    char buffer[16384];
+    while (true) {
+        int n = SSL_read(ssl_, buffer, sizeof(buffer));
+        if (n > 0) {
+            input_buffer_.append(buffer, static_cast<size_t>(n));
+            got_data = true;
+            continue;
+        }
+        int err = SSL_get_error(ssl_, n);
+        if (err == SSL_ERROR_WANT_READ) {
+            break;
+        }
+        if (err == SSL_ERROR_WANT_WRITE) {
+            if (!channel_->isWriting()) channel_->enableWriting();
+            break;
+        }
+        if (err == SSL_ERROR_ZERO_RETURN) {
+            handleClose();
+            return;
+        }
+        char errbuf[256];
+        ERR_error_string_n(ERR_get_error(), errbuf, sizeof(errbuf));
+        LOG_ERROR("TLS read failed for " + name_ + ": " + errbuf);
+        handleClose();
+        return;
+    }
+    if (got_data && message_callback_) {
+        message_callback_(shared_from_this(), &input_buffer_);
+    }
+    if (output_buffer_.readableBytes() > 0 && !channel_->isWriting()) {
+        channel_->enableWriting();
+    }
+}
+
+void TcpConnection::handleTlsWrite() {
+    if (!doTlsHandshake()) return;
+
+    while (output_buffer_.readableBytes() > 0) {
+        int n = SSL_write(ssl_, output_buffer_.peek(), static_cast<int>(output_buffer_.readableBytes()));
+        if (n > 0) {
+            output_buffer_.retrieve(static_cast<size_t>(n));
+            continue;
+        }
+        int err = SSL_get_error(ssl_, n);
+        if (err == SSL_ERROR_WANT_WRITE) {
+            return;
+        }
+        if (err == SSL_ERROR_WANT_READ) {
+            return;
+        }
+        char errbuf[256];
+        ERR_error_string_n(ERR_get_error(), errbuf, sizeof(errbuf));
+        LOG_ERROR("TLS write failed for " + name_ + ": " + errbuf);
+        handleClose();
+        return;
+    }
+
+    if (output_buffer_.readableBytes() == 0) {
+        channel_->disableWriting();
+        if (write_complete_callback_) {
+            loop_->queueInLoop([self = shared_from_this()]() {
+                if (self->write_complete_callback_) {
+                    self->write_complete_callback_(self);
+                }
+            });
+        }
+        if (state_ == State::DISCONNECTING) {
+            shutdownInLoop();
+        }
+    }
+}
+
 void TcpConnection::shutdownInLoop() {
     loop_->assertInLoopThread();
     if (!channel_->isWriting()) {
+        if (ssl_ != nullptr && tls_handshake_done_) {
+            SSL_shutdown(ssl_);
+        }
         socket_->shutdownWrite();
     }
 }

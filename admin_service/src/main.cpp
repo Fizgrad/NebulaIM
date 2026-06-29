@@ -34,6 +34,7 @@ int main(int argc, char* argv[]) {
     }
 #if defined(NEBULA_ENABLE_STORAGE)
     nebula::AdminServiceImpl service(context.adminAuth(),
+                                     context.runtimeConfig(),
                                      context.mysqlPool(),
                                      context.redisClient(),
                                      context.cleanupOptions(),

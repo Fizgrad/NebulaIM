@@ -19,6 +19,8 @@
 | PushService Metrics | 9104 |
 | Prometheus | 9090 |
 | Grafana | 3000 |
+| Jaeger UI | 16686 |
+| OTLP HTTP | 4318 |
 | MySQL | 3306 |
 | Redis | 6379 |
 | Kafka | 9092 |
@@ -56,7 +58,7 @@ admin.cleanup.message_receipt_retention_ms=7776000000
 admin.cleanup.batch_size=1000
 ```
 
-Use `RunCleanup(dry_run=true)` before destructive cleanup. Cleanup removes expired MySQL rows and prunes stale Redis online device members whose per-device online/connection keys have expired. AdminService also exposes real Redis-derived online user/connection counts and Kafka lag through `GetSystemStats` and `GetKafkaLagInfo`.
+Use `RunCleanup(dry_run=true)` before destructive cleanup. Cleanup removes expired MySQL rows and prunes stale Redis online device members whose per-device online/connection keys have expired. AdminService also exposes real Redis-derived online user/connection counts, Kafka lag, production config validation, service overview, and recent audit events through `GetSystemStats`, `GetKafkaLagInfo`, `ValidateConfig`, `GetServiceOverview`, and `ListAuditEvents`.
 
 ## gRPC TLS
 
@@ -79,7 +81,37 @@ grpc.tls.require_client_auth=true
 grpc.tls.target_name_override=nebula.internal
 ```
 
-All C++ gRPC service listeners and internal Gateway/Push clients read these keys. The Gateway TCP/WebSocket listener is still plaintext at the socket layer, so terminate public TLS at the edge unless native Gateway TLS is implemented.
+All C++ gRPC service listeners and internal Gateway/Push clients read these keys.
+
+## Gateway Native TLS
+
+Public TCP/WebSocket TLS can still be terminated at Nginx/Envoy. If the C++ Gateway must terminate TLS directly, configure:
+
+```text
+gateway.tls.enabled=true
+gateway.tls.cert_path=/etc/nebulaim/tls/gateway.crt
+gateway.tls.key_path=/etc/nebulaim/tls/gateway.key
+gateway.tls.ca_cert_path=
+gateway.tls.require_client_auth=false
+```
+
+`scripts/health_check.sh` uses `openssl s_client` for the Gateway listener when `gateway.tls.enabled=true`. Use `ws://` when disabled and `wss://` when enabled.
+
+## Tracing
+
+Docker Compose includes Jaeger all-in-one with OTLP/HTTP on `127.0.0.1:4318` and UI on `127.0.0.1:16686` in production override mode. Enable tracing with:
+
+```text
+trace.enabled=true
+trace.service_name=nebulaim
+trace.otlp_endpoint=http://127.0.0.1:4318/v1/traces
+trace.export_timeout_ms=2000
+trace.batch_size=64
+trace.flush_interval_ms=1000
+trace.max_queue_size=4096
+```
+
+The lightweight exporter sends OTLP/HTTP JSON batches. It is intentionally dependency-light and does not implement the full OpenTelemetry C++ SDK surface.
 
 ## Database Migration
 

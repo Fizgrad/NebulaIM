@@ -20,6 +20,8 @@ public:
 
     static void setTraceId(const std::string& trace_id);
     static std::string traceId();
+    static void setSpanId(const std::string& span_id);
+    static std::string spanId();
     static void clear();
     static std::string ensureTraceId(const std::string& candidate = "");
 };

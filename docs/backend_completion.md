@@ -8,7 +8,7 @@ Before phase 13 NebulaIM already had the main TCP/gRPC/Kafka path, but still had
 
 Phase 13 adds native WebSocket framing and handshake support in the C++ Gateway, a bounded Gateway RPC executor, Outbox Pattern storage, friend request APIs, conversation table/DAO/service, read receipt and recall proto/service support, multi-device connection indexing and Redis online keys, logout/refresh token RPCs, token bucket rate limiting, circuit breaker primitives, trace ID context, migration scripts, admin and conversation services, real backend E2E tests, and final production documentation.
 
-The single-node production hardening pass after phase 13 adds Kafka manual offset commit in PushService, real AdminService online stats and Kafka lag queries, semantic health/readiness scripts, migration locking and pre-migration backup support, Nginx WebSocket security controls, WebSocket push-frame correctness, a browser Web SDK, recall event persistence in the same transaction as the recall update, removal of single-device online compatibility indexes, stale Redis device cleanup, and removal of default test-user seed data.
+The single-node production hardening pass after phase 13 adds Kafka manual offset commit in PushService, real AdminService online stats and Kafka lag queries, semantic health/readiness scripts, migration locking and pre-migration backup support, Nginx WebSocket security controls, WebSocket push-frame correctness, a browser Web SDK, recall event persistence in the same transaction as the recall update, removal of single-device online compatibility indexes, stale Redis device cleanup, removal of default test-user seed data, optional native Gateway TLS, lightweight OTLP/Jaeger tracing, and stronger Admin operations APIs.
 
 ## Function Matrix
 
@@ -26,10 +26,11 @@ The single-node production hardening pass after phase 13 adds Kafka manual offse
 | Recall | Permission and recall-window checks; recall update and outbox event share one transaction |
 | Multi-device | Gateway local index and Redis keys are device-scoped only; single-user online indexes are removed |
 | Protection | Token bucket and circuit breaker primitives |
-| Trace | Thread-local TraceContext, generated TraceId, and gRPC metadata propagation |
+| Trace | Thread-local TraceContext, generated TraceId/span_id, gRPC metadata propagation, TraceSpan, TraceManager, and OTLP/HTTP export to Jaeger |
+| Gateway TLS | Optional native TLS for TCP/WebSocket Gateway listener through OpenSSL |
 | Migration | Versioned SQL files, schema_migrations, MySQL named lock, optional backup, and fail-fast migrate_db.sh |
 | Service discovery | Static resolver abstraction, ready for Consul/etcd/K8s replacement |
-| Admin security | Scoped SHA-256 admin tokens, metadata auth, audit logs, HealthCheck RPC, bounded cleanup, stale online-device cleanup, online stats, outbox stats, and Kafka lag |
+| Admin security | Scoped SHA-256 admin tokens, metadata auth, in-memory audit query, HealthCheck RPC, config validation, service overview, bounded cleanup, stale online-device cleanup, online stats, outbox stats, and Kafka lag |
 | gRPC TLS/mTLS | Config-driven credentials for service listeners and internal clients |
 | Health/readiness | Semantic dependency health checks and systemd ExecStartPre readiness waits |
 | Browser SDK | `web_sdk/nebulaim.js` wraps binary WebSocket Packet + protobuf calls |
@@ -37,4 +38,4 @@ The single-node production hardening pass after phase 13 adds Kafka manual offse
 
 ## Remaining Production Work
 
-Still not covered: native TLS in the TCP/WebSocket Gateway socket layer, real distributed service discovery cluster backend, Kubernetes Operator, full Jaeger/OpenTelemetry exporter, identity-provider backed admin RBAC, end-to-end encryption, multi-region deployment, full async gRPC completion queue migration, and advanced cleanup governance such as legal hold and per-tenant retention.
+Still not covered: real distributed service discovery cluster backend, Kubernetes Operator, full OpenTelemetry SDK semantics beyond the lightweight OTLP exporter, identity-provider backed admin RBAC, end-to-end encryption, multi-region deployment, full async gRPC completion queue migration, and advanced cleanup governance such as legal hold and per-tenant retention.

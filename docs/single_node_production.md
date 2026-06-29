@@ -1,6 +1,6 @@
 # Single Node Production Deployment
 
-This guide targets one Linux server running NebulaIM C++ services under systemd, with MySQL/Redis/Kafka/Prometheus/Grafana under Docker Compose. Public WebSocket TLS is terminated by Nginx and forwarded to the local Gateway.
+This guide targets one Linux server running NebulaIM C++ services under systemd, with MySQL/Redis/Kafka/Prometheus/Grafana/Jaeger under Docker Compose. Public WebSocket TLS can be terminated by Nginx and forwarded to the local Gateway, or terminated directly by Gateway native TLS.
 
 ## Server Layout
 
@@ -12,7 +12,7 @@ This guide targets one Linux server running NebulaIM C++ services under systemd,
 /var/backups/nebulaim/      MySQL backups
 ```
 
-Only Nginx should listen publicly on 80/443. Internal gRPC, MySQL, Redis, Kafka, Prometheus, and Grafana should bind to `127.0.0.1`.
+Only Nginx should listen publicly on 80/443 when edge TLS is used. Internal gRPC, MySQL, Redis, Kafka, Prometheus, Grafana, Jaeger, and raw Gateway ports should bind to `127.0.0.1` unless Gateway native TLS is deliberately exposed.
 
 ## Build
 
@@ -86,6 +86,35 @@ Copy `deploy/nginx/nebulaim.conf` to your Nginx site directory, replace `nebula.
 
 For native TCP clients, use the optional `deploy/nginx/nebulaim-stream.conf.example` inside the Nginx `stream {}` context and expose a TLS TCP port such as `9443`.
 
+## Native Gateway TLS
+
+If Gateway terminates TLS directly, install PEM files and set:
+
+```text
+gateway.tls.enabled=true
+gateway.tls.cert_path=/etc/nebulaim/tls/gateway.crt
+gateway.tls.key_path=/etc/nebulaim/tls/gateway.key
+gateway.tls.ca_cert_path=
+gateway.tls.require_client_auth=false
+```
+
+Browser clients then use `wss://host:9000/` if that port is exposed. For most single-node deployments, Nginx TLS on 443 remains simpler because it centralizes certificates, Origin checks, and rate limits.
+
+## Tracing
+
+Jaeger is included in Compose. To enable span export:
+
+```text
+trace.enabled=true
+trace.otlp_endpoint=http://127.0.0.1:4318/v1/traces
+```
+
+Open Jaeger at:
+
+```text
+http://127.0.0.1:16686
+```
+
 ## Backups
 
 Run a manual backup:
@@ -117,7 +146,7 @@ Allow only:
 9443/tcp   optional native TCP over TLS
 ```
 
-Do not expose MySQL, Redis, Kafka, gRPC service ports, Prometheus, Grafana, or the raw Gateway port directly to the internet.
+Do not expose MySQL, Redis, Kafka, gRPC service ports, Prometheus, Grafana, Jaeger, or a plaintext Gateway port directly to the internet. Expose Gateway directly only when `gateway.tls.enabled=true` and firewall/rate-limit policy is explicit.
 
 ## Rollout Checklist
 
@@ -130,6 +159,7 @@ Do not expose MySQL, Redis, Kafka, gRPC service ports, Prometheus, Grafana, or t
 7. Nginx TLS certificate is valid.
 8. `health_check.sh` passes locally.
 9. Backup job has produced at least one restorable dump.
-10. `NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e` passes against the running services.
+10. AdminService `ValidateConfig`, `GetServiceOverview`, and `HealthCheck` return expected results.
+11. `NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e` passes against the running services.
 
 `health_check.sh` performs semantic checks for MySQL query, Redis ping, Kafka metadata, outbox pending/dead rows, service ports, and systemd status when available.

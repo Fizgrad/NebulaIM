@@ -90,6 +90,16 @@ services:
     volumes:
       - nebula_grafana_data:/var/lib/grafana
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: nebula-jaeger
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+
 volumes:
   nebula_mysql_data:
   nebula_redis_data:

@@ -31,6 +31,8 @@ protobuf request -> NebulaIM Packet -> WebSocket binary frame
 
 Common frontend mistakes are sending a display name instead of numeric `to_user_id`, opening a new socket after login, or sending text/JSON frames. Gateway closes non-binary application frames by design.
 
-For public deployment, terminate TLS at Nginx/Envoy/load balancer. `deploy/nginx/nebulaim.conf` includes a WebSocket origin allowlist, per-IP connection/request limits, request ID forwarding, and header/body limits. Replace `nebula.example.com` and allowed origins before production use.
+For public deployment, either terminate TLS at Nginx/Envoy/load balancer or enable native Gateway TLS through `gateway.tls.enabled=true`. `deploy/nginx/nebulaim.conf` includes a WebSocket origin allowlist, per-IP connection/request limits, request ID forwarding, and header/body limits. Replace `nebula.example.com` and allowed origins before production use.
+
+When native Gateway TLS is enabled, browser clients use `wss://host:port/` and native clients use TLS over the same PacketCodec byte stream. TLS is handled below WebSocket/PacketCodec in `TcpConnection`, so frame parsing stays unchanged after decryption.
 
 For pressure tests, count WebSocket handshake cost separately from steady-state binary frame throughput. Keep TLS termination and compression disabled unless explicitly measuring them.

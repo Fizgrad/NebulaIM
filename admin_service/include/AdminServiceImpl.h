@@ -4,6 +4,8 @@
 #include "admin.grpc.pb.h"
 
 #include <cstdint>
+#include <deque>
+#include <mutex>
 #include <string>
 
 namespace nebula {
@@ -17,6 +19,7 @@ public:
     explicit AdminServiceImpl(AdminAuth admin_auth = AdminAuth{});
 #if defined(NEBULA_ENABLE_STORAGE)
     AdminServiceImpl(AdminAuth admin_auth,
+                     AdminRuntimeConfig runtime_config,
                      MySqlConnectionPool* mysql_pool,
                      RedisClient* redis_client,
                      AdminCleanupOptions cleanup_options = {},
@@ -39,13 +42,39 @@ public:
     grpc::Status HealthCheck(grpc::ServerContext* context,
                              const proto::HealthCheckRequest* request,
                              proto::HealthCheckResponse* response) override;
+    grpc::Status ValidateConfig(grpc::ServerContext* context,
+                                const proto::ValidateConfigRequest* request,
+                                proto::ValidateConfigResponse* response) override;
+    grpc::Status GetServiceOverview(grpc::ServerContext* context,
+                                    const proto::GetServiceOverviewRequest* request,
+                                    proto::GetServiceOverviewResponse* response) override;
+    grpc::Status ListAuditEvents(grpc::ServerContext* context,
+                                 const proto::ListAuditEventsRequest* request,
+                                 proto::ListAuditEventsResponse* response) override;
 
 private:
+    struct AuditEvent {
+        int64_t timestamp_ms = 0;
+        std::string request_id;
+        std::string principal;
+        std::string action;
+        std::string scope;
+        std::string decision;
+        std::string detail;
+    };
+
     bool authorize(const grpc::ServerContext* context,
                    const std::string& request_id,
                    const std::string& action,
                    const std::string& required_scope,
                    proto::CommonResponse* response) const;
+    void appendAudit(AuditEvent event) const;
+    std::vector<AuditEvent> auditEvents(size_t limit) const;
+    void addConfigIssue(proto::ValidateConfigResponse* response,
+                        const std::string& severity,
+                        const std::string& key,
+                        const std::string& message) const;
+    bool canConnectAddress(const std::string& address, int timeout_ms, std::string* detail) const;
 #if defined(NEBULA_ENABLE_STORAGE)
     uint64_t countRows(MySqlConnection& conn, const std::string& table, const std::string& condition) const;
     uint64_t cleanupRows(MySqlConnection& conn,
@@ -57,6 +86,10 @@ private:
 
 private:
     AdminAuth admin_auth_;
+    AdminRuntimeConfig runtime_config_;
+    mutable std::mutex audit_mutex_;
+    mutable std::deque<AuditEvent> audit_events_;
+    size_t max_audit_events_ = 1024;
 #if defined(NEBULA_ENABLE_STORAGE)
     MySqlConnectionPool* mysql_pool_ = nullptr;
     RedisClient* redis_client_ = nullptr;

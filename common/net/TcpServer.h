@@ -13,6 +13,7 @@ class EventLoop;
 class EventLoopThreadPool;
 class InetAddress;
 class TcpConnection;
+class TlsContext;
 
 class TcpServer {
 public:
@@ -32,6 +33,7 @@ public:
     TcpServer& operator=(const TcpServer&) = delete;
 
     void setThreadNum(int num_threads);
+    void setTlsContext(std::shared_ptr<TlsContext> tls_context);
 
     void setConnectionCallback(ConnectionCallback cb);
     void setMessageCallback(MessageCallback cb);
@@ -53,6 +55,7 @@ private:
     ConnectionCallback connection_callback_;
     MessageCallback message_callback_;
     WriteCompleteCallback write_complete_callback_;
+    std::shared_ptr<TlsContext> tls_context_;
 
     bool started_;
     int next_conn_id_;

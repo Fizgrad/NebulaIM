@@ -20,6 +20,7 @@
 #include "common/redis/RedisClient.h"
 #include "common/rpc/RpcMetadata.h"
 #include "common/trace/TraceContext.h"
+#include "common/trace/TraceSpan.h"
 #include "common/utils/TimeUtil.h"
 
 #include <atomic>
@@ -110,6 +111,10 @@ bool MessageServiceImpl::validateContent(const std::string& request_id, const st
 grpc::Status MessageServiceImpl::SendSingleMessage(grpc::ServerContext* context, const proto::SendSingleMessageRequest* request, proto::SendSingleMessageResponse* response) {
     std::string inbound_trace = RpcMetadata::extractTraceId(context);
     TraceContext::Scope trace(TraceContext::ensureTraceId(inbound_trace.empty() ? request->request_id() : inbound_trace));
+    TraceSpan span("message.SendSingleMessage", TraceSpanKind::SERVER);
+    span.setAttribute("request_id", request->request_id());
+    span.setAttribute("from_user_id", std::to_string(request->from_user_id()));
+    span.setAttribute("to_user_id", std::to_string(request->to_user_id()));
     LOG_INFO("SendSingleMessage request_id=" + request->request_id() + " from=" + std::to_string(request->from_user_id()) + " to=" + std::to_string(request->to_user_id()));
     if (invalidDeps()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     if (request->from_user_id() == 0 || request->to_user_id() == 0 || request->from_user_id() == request->to_user_id()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
@@ -168,6 +173,10 @@ grpc::Status MessageServiceImpl::SendSingleMessage(grpc::ServerContext* context,
 grpc::Status MessageServiceImpl::SendGroupMessage(grpc::ServerContext* context, const proto::SendGroupMessageRequest* request, proto::SendGroupMessageResponse* response) {
     std::string inbound_trace = RpcMetadata::extractTraceId(context);
     TraceContext::Scope trace(TraceContext::ensureTraceId(inbound_trace.empty() ? request->request_id() : inbound_trace));
+    TraceSpan span("message.SendGroupMessage", TraceSpanKind::SERVER);
+    span.setAttribute("request_id", request->request_id());
+    span.setAttribute("from_user_id", std::to_string(request->from_user_id()));
+    span.setAttribute("group_id", std::to_string(request->group_id()));
     LOG_INFO("SendGroupMessage request_id=" + request->request_id() + " from=" + std::to_string(request->from_user_id()) + " group=" + std::to_string(request->group_id()));
     if (invalidDeps()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     if (request->from_user_id() == 0 || request->group_id() == 0) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }

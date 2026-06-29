@@ -3,7 +3,9 @@
 ## Implemented
 
 - WebSocket support
+- Native TLS inside the Gateway TCP/WebSocket listener
 - gRPC TLS/mTLS configuration
+- Lightweight OTLP/Jaeger tracing exporter
 - Gateway RPC executor and business worker pool
 - Outbox Pattern
 - Static service discovery abstraction
@@ -20,12 +22,12 @@
 - Migration locking and pre-migration backup support
 - Browser Web SDK for WebSocket Packet/protobuf calls
 - Nginx WebSocket Origin/rate/connection hardening
+- Admin config validation, service overview, and in-memory audit query
 
 ## Remaining
 
-- Native TLS inside the Gateway TCP/WebSocket listener
 - Real distributed service discovery backend
-- OpenTelemetry/Jaeger exporter
+- Full OpenTelemetry SDK semantics beyond the lightweight exporter
 - Large group fanout optimization
 - Native gRPC async completion-queue clients
 - Search

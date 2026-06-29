@@ -1,6 +1,7 @@
 #include "RelationServiceContext.h"
 
 #include "common/log/Logger.h"
+#include "common/trace/TraceManager.h"
 
 namespace nebula {
 
@@ -12,6 +13,7 @@ bool RelationServiceContext::init(const std::string& config_path) {
         LOG_ERROR("failed to load config: " + config_path);
         return false;
     }
+    TraceManager::instance().configure(TraceManager::configFrom(config_, "nebula-relation-service"));
 
     MySqlConfig mysql;
     mysql.host = config_.getString("mysql.host", mysql.host);

@@ -32,13 +32,14 @@ Browser -> WebSocket binary frame -> PacketCodec -> Gateway
                                                                             Gateway
 ```
 
-AdminService provides token-protected health, cleanup, online stats, outbox stats, and Kafka lag for operations. Prometheus/Grafana provide the metrics and dashboard assets.
+AdminService provides token-protected health, cleanup, online stats, outbox stats, Kafka lag, config validation, service overview, and audit-event query for operations. Prometheus/Grafana provide metrics dashboards, and Jaeger receives OTLP/HTTP trace spans when tracing is enabled.
 
 ## Service responsibilities
 
 ### Gateway
 
 - Accept native TCP Packet clients and browser WebSocket clients on the same port.
+- Optionally terminate native TLS for TCP/WebSocket clients at the Gateway socket layer.
 - Decode PacketCodec frames and validate protocol headers.
 - Handle register/login/heartbeat/message/ACK/offline-pull packets.
 - Dispatch blocking backend gRPC stubs through a bounded `RpcExecutor`.
@@ -90,6 +91,7 @@ AdminService provides token-protected health, cleanup, online stats, outbox stat
 - Authenticate scoped SHA-256 admin tokens through gRPC metadata.
 - Run bounded cleanup.
 - Report dependency health, online stats, outbox stats, and Kafka lag.
+- Validate production-risk config, report service overview, and expose recent audit events.
 
 ## Data responsibilities
 
@@ -104,3 +106,4 @@ AdminService provides token-protected health, cleanup, online stats, outbox stat
 - Outbox makes MySQL the authoritative local transaction and Kafka publication eventually consistent.
 - PushService manual commit reduces consumer-side message loss windows.
 - `health_check.sh` and `wait_ready.sh` provide single-node semantic readiness checks.
+- `TraceSpan`/`TraceManager` export lightweight OTLP/HTTP traces to Jaeger without using trace IDs as Prometheus labels.

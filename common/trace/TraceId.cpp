@@ -22,6 +22,15 @@ std::string TraceId::generate() {
     return oss.str();
 }
 
+std::string TraceId::generateSpanId() {
+    static std::atomic<uint64_t> counter{0};
+    static thread_local std::mt19937_64 rng(std::random_device{}());
+    uint64_t rnd = rng() ^ counter.fetch_add(1, std::memory_order_relaxed);
+    std::ostringstream oss;
+    oss << std::hex << std::setfill('0') << std::setw(16) << rnd;
+    return oss.str();
+}
+
 bool TraceId::isValid(const std::string& trace_id) {
     if (trace_id.size() < 16 || trace_id.size() > 64) return false;
     for (char c : trace_id) {
@@ -29,6 +38,17 @@ bool TraceId::isValid(const std::string& trace_id) {
         const bool lower = c >= 'a' && c <= 'f';
         const bool upper = c >= 'A' && c <= 'F';
         if (!digit && !lower && !upper && c != '-') return false;
+    }
+    return true;
+}
+
+bool TraceId::isValidSpanId(const std::string& span_id) {
+    if (span_id.size() != 16) return false;
+    for (char c : span_id) {
+        const bool digit = c >= '0' && c <= '9';
+        const bool lower = c >= 'a' && c <= 'f';
+        const bool upper = c >= 'A' && c <= 'F';
+        if (!digit && !lower && !upper) return false;
     }
     return true;
 }

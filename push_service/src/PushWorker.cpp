@@ -3,6 +3,8 @@
 #include "common/log/Logger.h"
 #include "common/message/MessageKafkaPayload.h"
 #include "common/push/PushDispatcher.h"
+#include "common/trace/TraceContext.h"
+#include "common/trace/TraceSpan.h"
 
 namespace nebula {
 
@@ -57,6 +59,12 @@ bool PushWorker::handleKafkaMessage(const KafkaMessage& message) {
                   " payload_bytes=" + std::to_string(message.payload.size()));
         return true;
     }
+    TraceContext::Scope trace(TraceContext::ensureTraceId(data.trace_id()));
+    TraceSpan span("push.kafka.consume", TraceSpanKind::CONSUMER);
+    span.setAttribute("topic", message.topic);
+    span.setAttribute("partition", std::to_string(message.partition));
+    span.setAttribute("offset", std::to_string(message.offset));
+    span.setAttribute("message_id", std::to_string(data.message_id()));
     if (message.topic == options_.topic_single) return handleSingleMessage(data);
     if (message.topic == options_.topic_group) return handleGroupMessage(data);
     if (message.topic == options_.topic_retry) return handleRetryMessage(data);

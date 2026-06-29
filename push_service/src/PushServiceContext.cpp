@@ -2,6 +2,7 @@
 
 #include "PushWorker.h"
 #include "common/log/Logger.h"
+#include "common/trace/TraceManager.h"
 
 namespace nebula {
 
@@ -10,6 +11,7 @@ PushServiceContext::~PushServiceContext() { stopWorkers(); }
 
 bool PushServiceContext::init(const std::string& config_path) {
     if (!config_.loadFromFile(config_path)) return false;
+    TraceManager::instance().configure(TraceManager::configFrom(config_, "nebula-push-service"));
     MySqlConfig mysql;
     mysql.host = config_.getString("mysql.host", mysql.host);
     mysql.port = config_.getInt("mysql.port", mysql.port);

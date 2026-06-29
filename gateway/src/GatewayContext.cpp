@@ -1,6 +1,7 @@
 #include "GatewayContext.h"
 
 #include "common/log/Logger.h"
+#include "common/trace/TraceManager.h"
 
 namespace nebula {
 
@@ -19,11 +20,22 @@ bool GatewayContext::init(const std::string& config_path) {
     options_.rpc_port = config_.getInt("gateway.rpc.port", options_.rpc_port);
     options_.heartbeat_timeout_ms = config_.getInt("gateway.heartbeat_timeout_ms", options_.heartbeat_timeout_ms);
     options_.online_ttl_seconds = config_.getInt("gateway.online_ttl_seconds", options_.online_ttl_seconds);
+    options_.tcp_tls = TlsConfigLoader::fromConfig(config_, "gateway.tls.");
     options_.user_service_addr = config_.getString("user_service.addr", options_.user_service_addr);
     options_.message_service_addr = config_.getString("message_service.addr", options_.message_service_addr);
     options_.relation_service_addr = config_.getString("relation_service.addr", options_.relation_service_addr);
     options_.push_service_addr = config_.getString("push_service.addr", options_.push_service_addr);
     grpc_tls_config_ = GrpcTlsCredentials::fromConfig(config_);
+    TraceManager::instance().configure(TraceManager::configFrom(config_, "nebula-gateway"));
+
+    if (options_.tcp_tls.enabled) {
+        std::string tls_error;
+        tcp_tls_context_ = TlsContext::createServer(options_.tcp_tls, &tls_error);
+        if (!tcp_tls_context_) {
+            LOG_ERROR("failed to initialize Gateway TCP TLS: " + tls_error);
+            return false;
+        }
+    }
 
     auto redis = std::make_unique<RedisClient>();
     RedisConfig redis_config;
@@ -59,5 +71,6 @@ std::string GatewayContext::tcpListenIp() const { return options_.tcp_host; }
 int GatewayContext::tcpListenPort() const { return options_.tcp_port; }
 std::string GatewayContext::rpcListenAddress() const { return options_.rpc_host + ":" + std::to_string(options_.rpc_port); }
 const GrpcTlsConfig& GatewayContext::grpcTlsConfig() const { return grpc_tls_config_; }
+std::shared_ptr<TlsContext> GatewayContext::tcpTlsContext() const { return tcp_tls_context_; }
 
 }  // namespace nebula

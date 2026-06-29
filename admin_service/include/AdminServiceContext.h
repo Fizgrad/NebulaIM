@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace nebula {
@@ -25,6 +26,22 @@ struct AdminCleanupOptions {
     int cleanup_batch_size = 1000;
 };
 
+struct AdminRuntimeConfig {
+    bool admin_auth_enabled = false;
+    bool grpc_tls_enabled = false;
+    bool gateway_tls_enabled = false;
+    bool trace_enabled = false;
+    std::string trace_otlp_endpoint;
+    std::vector<std::pair<std::string, std::string>> service_addresses;
+    std::string gateway_tcp_host;
+    int gateway_tcp_port = 9000;
+    std::string mysql_host;
+    std::string mysql_password;
+    std::string redis_host;
+    std::string redis_password;
+    std::string kafka_brokers;
+};
+
 class AdminServiceContext {
 public:
     bool init(const std::string& config_path);
@@ -32,6 +49,7 @@ public:
     const AdminAuth& adminAuth() const;
     const GrpcTlsConfig& grpcTlsConfig() const;
     const AdminCleanupOptions& cleanupOptions() const;
+    const AdminRuntimeConfig& runtimeConfig() const;
 
 #if defined(NEBULA_ENABLE_STORAGE)
     MySqlConnectionPool* mysqlPool();
@@ -46,6 +64,7 @@ private:
     AdminAuth admin_auth_;
     GrpcTlsConfig grpc_tls_config_;
     AdminCleanupOptions cleanup_options_;
+    AdminRuntimeConfig runtime_config_;
 
 #if defined(NEBULA_ENABLE_STORAGE)
     MySqlConnectionPool mysql_pool_;

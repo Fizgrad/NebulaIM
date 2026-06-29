@@ -18,7 +18,7 @@ admin_service.admin_tokens=ops:sha256:<token_sha256_hex>:health,stats,outbox;mai
 
 Supported scopes are `health`, `stats`, `outbox`, `kafka`, `cleanup`, and `*`. AdminService writes allow/deny audit log lines with action, scope, principal, and request_id. Config stores SHA-256 token hashes, not raw operational tokens.
 
-Trace IDs are propagated through gRPC metadata key `x-nebula-trace-id`. They are intentionally not Prometheus labels to avoid high-cardinality metrics.
+Trace IDs are propagated through gRPC metadata key `x-nebula-trace-id`. Spans can be exported to Jaeger through OTLP/HTTP. Trace IDs are intentionally not Prometheus labels to avoid high-cardinality metrics.
 
 gRPC TLS/mTLS is config-driven through:
 
@@ -33,7 +33,19 @@ grpc.tls.require_client_auth
 grpc.tls.target_name_override
 ```
 
-Local development keeps `grpc.tls.enabled=false`. Production service-to-service traffic can enable TLS or mTLS by providing PEM files on every service node. Public TCP/WebSocket Gateway TLS is still best terminated at a load balancer/Nginx/Envoy in the current codebase; native TLS in the epoll socket layer remains future work.
+Local development keeps `grpc.tls.enabled=false`. Production service-to-service traffic can enable TLS or mTLS by providing PEM files on every service node.
+
+Gateway client traffic can be protected in two supported ways:
+
+```text
+gateway.tls.enabled=true
+gateway.tls.cert_path=/etc/nebulaim/tls/gateway.crt
+gateway.tls.key_path=/etc/nebulaim/tls/gateway.key
+gateway.tls.ca_cert_path=
+gateway.tls.require_client_auth=false
+```
+
+or by terminating TLS at a load balancer/Nginx/Envoy and forwarding plaintext to a loopback-only Gateway. Native Gateway TLS is implemented in the epoll `TcpConnection` layer, so TCP Packet and WebSocket business parsing remains unchanged after TLS decryption.
 
 `deploy/nginx/nebulaim.conf` includes a WebSocket Origin allowlist, per-IP connection limit, request rate limit, request ID forwarding, and header/body size limits. Replace the example domain/origin before exposing the service.
 

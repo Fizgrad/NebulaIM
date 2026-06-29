@@ -14,6 +14,9 @@
 - WebSocket client received unreadable push: verify Gateway is running the version that wraps `GatewayService.DeliverToConnection` output in a WebSocket binary frame for WebSocket connections.
 - Prometheus no data: verify metrics ports and scrape targets.
 - Grafana no data: verify datasource points to Prometheus.
+- Jaeger no traces: verify `trace.enabled=true`, `trace.otlp_endpoint=http://127.0.0.1:4318/v1/traces`, Jaeger container health, and service logs for `trace export failed`.
+- Gateway TLS failed: verify `gateway.tls.cert_path` and `gateway.tls.key_path`, then run `openssl s_client -connect 127.0.0.1:9000 -servername 127.0.0.1`.
+- Admin operation denied: verify the raw token is sent in gRPC metadata key `x-nebula-admin-token` and its configured scope matches the RPC.
 - P99 high: inspect CPU, DB latency, Kafka lag, outbox backlog, Gateway RPC queue saturation, and circuit breaker state.
 - Production readiness: run `./scripts/health_check.sh <config>` and `./scripts/wait_ready.sh <config> gateway`.
 - Full E2E: after services are running, run `NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e`.

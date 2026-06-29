@@ -21,6 +21,20 @@ gateway.online_ttl_seconds=60
 gateway.max_packet_body_length=1048576
 gateway.rpc.host=127.0.0.1
 gateway.rpc.port=50055
+gateway.tls.enabled=false
+gateway.tls.cert_path=/etc/nebulaim/tls/gateway.crt
+gateway.tls.key_path=/etc/nebulaim/tls/gateway.key
+gateway.tls.ca_cert_path=
+gateway.tls.require_client_auth=false
+
+# OpenTelemetry OTLP/HTTP tracing. Enable when Jaeger/OTel Collector is running.
+trace.enabled=false
+trace.service_name=nebulaim
+trace.otlp_endpoint=http://127.0.0.1:4318/v1/traces
+trace.export_timeout_ms=2000
+trace.batch_size=64
+trace.flush_interval_ms=1000
+trace.max_queue_size=4096
 
 user_service.host=127.0.0.1
 user_service.port=50051

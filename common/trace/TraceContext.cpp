@@ -6,6 +6,7 @@ namespace nebula {
 
 namespace {
 thread_local std::string tls_trace_id;
+thread_local std::string tls_span_id;
 }
 
 TraceContext::Scope::Scope(std::string trace_id) : previous_(tls_trace_id) {
@@ -24,8 +25,17 @@ std::string TraceContext::traceId() {
     return tls_trace_id;
 }
 
+void TraceContext::setSpanId(const std::string& span_id) {
+    tls_span_id = span_id;
+}
+
+std::string TraceContext::spanId() {
+    return tls_span_id;
+}
+
 void TraceContext::clear() {
     tls_trace_id.clear();
+    tls_span_id.clear();
 }
 
 std::string TraceContext::ensureTraceId(const std::string& candidate) {

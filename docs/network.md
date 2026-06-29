@@ -2,7 +2,7 @@
 
 ## Overall design
 
-The network library under `common/net` is a lightweight C++17 Reactor implementation for NebulaIM gateway long connections. It uses Linux epoll, nonblocking TCP sockets, eventfd for cross-thread wakeup, timerfd for timers, and the shared `Buffer` for input/output buffering.
+The network library under `common/net` is a lightweight C++17 Reactor implementation for NebulaIM gateway long connections. It uses Linux epoll, nonblocking TCP sockets, optional OpenSSL TLS in `TcpConnection`, eventfd for cross-thread wakeup, timerfd for timers, and the shared `Buffer` for input/output buffering.
 
 ## Reactor model
 
@@ -55,6 +55,8 @@ A Reactor waits for IO events, dispatches callbacks, and keeps all fd operations
 5. `send` writes immediately when possible or appends to output `Buffer` and waits for `EPOLLOUT`.
 6. Peer close or force close invokes close callback.
 7. `TcpServer` removes the connection and calls `connectDestroyed` in the owner loop.
+
+When a `TlsContext` is attached to `TcpServer`, each accepted `TcpConnection` performs nonblocking `SSL_accept` before application bytes are delivered to the message callback. `SSL_read` and `SSL_write` feed the same input/output Buffers, so PacketCodec and WebSocket code do not need separate TLS branches.
 
 ## Buffer and TCP sticky/partial packets
 

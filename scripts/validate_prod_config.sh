@@ -86,8 +86,9 @@ for key in "${loopback_required_keys[@]}"; do
 done
 
 gateway_host="$(get_cfg gateway.tcp.host)"
-if [[ "${gateway_host}" != "127.0.0.1" && "${ALLOW_PUBLIC_GATEWAY_PLAINTEXT:-false}" != "true" ]]; then
-    fail "gateway.tcp.host=${gateway_host}; for single-node production bind Gateway to loopback and terminate TLS at Nginx"
+gateway_tls="$(get_cfg gateway.tls.enabled)"
+if [[ "${gateway_host}" != "127.0.0.1" && "${gateway_host}" != "localhost" && "${gateway_tls}" != "true" && "${ALLOW_PUBLIC_GATEWAY_PLAINTEXT:-false}" != "true" ]]; then
+    fail "gateway.tcp.host=${gateway_host}; bind Gateway to loopback, terminate TLS at Nginx, or enable gateway.tls.enabled=true"
 fi
 
 auth_min_length="$(get_cfg auth.password_min_length)"
@@ -101,6 +102,22 @@ for path_key in grpc.tls.ca_cert_path grpc.tls.server_cert_path grpc.tls.server_
         fail "${path_key}=${value} is not readable"
     fi
 done
+
+for path_key in gateway.tls.cert_path gateway.tls.key_path; do
+    value="$(get_cfg "${path_key}")"
+    if [[ "${gateway_tls}" == "true" && ! -r "${value}" ]]; then
+        fail "${path_key}=${value} is not readable"
+    fi
+done
+
+gateway_ca="$(get_cfg gateway.tls.ca_cert_path)"
+if [[ "${gateway_tls}" == "true" && "$(get_cfg gateway.tls.require_client_auth)" == "true" && ! -r "${gateway_ca}" ]]; then
+    fail "gateway.tls.ca_cert_path=${gateway_ca} is required for client certificate authentication"
+fi
+
+if [[ "$(get_cfg trace.enabled)" == "true" && -z "$(get_cfg trace.otlp_endpoint)" ]]; then
+    fail "trace.enabled=true requires trace.otlp_endpoint"
+fi
 
 if (( errors > 0 )); then
     echo "[config] validation failed: ${errors} error(s), ${warnings} warning(s)" >&2

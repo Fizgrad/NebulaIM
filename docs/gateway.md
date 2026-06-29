@@ -23,6 +23,18 @@ Heartbeat: update active time -> refresh Redis TTL -> return HEARTBEAT_RESP.
 
 Gateway now supports native TCP Packet clients and browser WebSocket clients on the same TCP port. WebSocket binary frame payloads are NebulaIM PacketCodec bytes, so routing and protobuf handling stay shared.
 
+The listener can optionally terminate TLS directly:
+
+```text
+gateway.tls.enabled=true
+gateway.tls.cert_path=/etc/nebulaim/tls/gateway.crt
+gateway.tls.key_path=/etc/nebulaim/tls/gateway.key
+gateway.tls.ca_cert_path=
+gateway.tls.require_client_auth=false
+```
+
+When enabled, the same Gateway port accepts TLS-protected TCP Packet clients and TLS-protected WebSocket clients (`wss://`). Nginx/Envoy TLS termination is still a valid production deployment, especially when central certificate automation and edge rate limiting are preferred.
+
 Backend RPC calls are dispatched through `RpcExecutor`, which runs blocking gRPC stubs in a worker pool and posts responses back to the connection EventLoop. The executor queue is bounded by `gateway.rpc_max_queue_size`; if it is saturated, Gateway returns `SERVICE_UNAVAILABLE` instead of growing memory without bound. Heartbeat remains a fast local path and does not leave the EventLoop.
 
 Gateway connection context carries `device_id` and `platform`. The local connection index is `user_id + device_id -> connection_id`; there is no single `user_id -> connection_id` production index. The Redis online-state contract is:
@@ -88,3 +100,4 @@ Gateway does not write MySQL and does not consume Kafka. It uses the custom Pack
 8. PushService routes to the correct gateway using Redis gateway_id and connection_id.
 9. Redis and local state may diverge; Push failure or TTL expiry repairs stale online state.
 10. Gateway avoids blocking the EventLoop by moving backend RPC work to `RpcExecutor`; the bounded queue provides backpressure, while native async gRPC would reduce worker-thread blocking further.
+11. Native TLS is implemented at `TcpConnection`, so PacketCodec/WebSocket business code stays unchanged after decryption.

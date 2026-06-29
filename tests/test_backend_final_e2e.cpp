@@ -1,4 +1,7 @@
 #include "common/net/Buffer.h"
+#if defined(NEBULA_ENABLE_STORAGE)
+#include "common/kafka/KafkaConsumer.h"
+#endif
 #include "common/protocol/PacketCodec.h"
 #include "common/protocol/ProtocolError.h"
 #include "common/utils/TimeUtil.h"
@@ -17,6 +20,8 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <thread>
+#include <vector>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -56,6 +61,32 @@ void requireServices() {
             std::exit(1);
         }
     }
+}
+
+void waitForPushConsumerReady() {
+#if defined(NEBULA_ENABLE_STORAGE)
+    nebula::KafkaConsumerConfig config;
+    config.brokers = "127.0.0.1:9092";
+    config.group_id = "nebula-consumer";
+    config.client_id = "nebula-e2e-readiness";
+    const std::vector<std::string> topics = {"nebula.message.single"};
+    std::string last_error;
+    const int64_t deadline = nebula::TimeUtil::nowMs() + 30000;
+    while (nebula::TimeUtil::nowMs() < deadline) {
+        std::string error;
+        auto lag = nebula::KafkaConsumer::queryLag(config, topics, 3000, &error);
+        if (!lag.empty() && error.empty()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+            return;
+        }
+        if (!error.empty()) last_error = error;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    std::cerr << "backend_final_e2e requires stable Kafka consumer group nebula-consumer; last_error=" << last_error << "\n";
+    std::exit(1);
+#else
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+#endif
 }
 
 bool writeAll(int fd, const std::string& data) {
@@ -213,6 +244,7 @@ int main() {
     }
 
     requireServices();
+    waitForPushConsumerReady();
 
     auto channel = grpc::CreateChannel("127.0.0.1:50053", grpc::InsecureChannelCredentials());
     auto relation = nebula::proto::RelationService::NewStub(channel);
