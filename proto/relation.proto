@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package nebula.proto;
+
+import "common.proto";
+
+service RelationService {
+  rpc AddFriend(AddFriendRequest) returns (CommonResponse);
+  rpc DeleteFriend(DeleteFriendRequest) returns (CommonResponse);
+  rpc ListFriends(ListFriendsRequest) returns (ListFriendsResponse);
+  rpc CreateGroup(CreateGroupRequest) returns (CreateGroupResponse);
+  rpc JoinGroup(JoinGroupRequest) returns (CommonResponse);
+  rpc LeaveGroup(LeaveGroupRequest) returns (CommonResponse);
+  rpc ListGroupMembers(ListGroupMembersRequest) returns (ListGroupMembersResponse);
+}
+
+message AddFriendRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  uint64 friend_id = 3;
+}
+
+message DeleteFriendRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  uint64 friend_id = 3;
+}
+
+message ListFriendsRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+}
+
+message ListFriendsResponse {
+  CommonResponse response = 1;
+  repeated UserInfo friends = 2;
+}
+
+message CreateGroupRequest {
+  string request_id = 1;
+  uint64 owner_id = 2;
+  string group_name = 3;
+}
+
+message CreateGroupResponse {
+  CommonResponse response = 1;
+  uint64 group_id = 2;
+}
+
+message JoinGroupRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  uint64 group_id = 3;
+}
+
+message LeaveGroupRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  uint64 group_id = 3;
+}
+
+message ListGroupMembersRequest {
+  string request_id = 1;
+  uint64 group_id = 2;
+}
+
+message ListGroupMembersResponse {
+  CommonResponse response = 1;
+  repeated UserInfo members = 2;
+}

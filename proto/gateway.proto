@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package nebula.proto;
+
+import "common.proto";
+
+service GatewayService {
+  rpc DeliverToConnection(DeliverToConnectionRequest) returns (DeliverToConnectionResponse);
+  rpc KickUser(KickUserRequest) returns (KickUserResponse);
+  rpc GetOnlineStatus(GetOnlineStatusRequest) returns (GetOnlineStatusResponse);
+}
+
+message DeliverToConnectionRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  string connection_id = 3;
+  MessageData message = 4;
+}
+
+message DeliverToConnectionResponse {
+  CommonResponse response = 1;
+}
+
+message KickUserRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  string reason = 3;
+}
+
+message KickUserResponse {
+  CommonResponse response = 1;
+}
+
+message GetOnlineStatusRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+}
+
+message GetOnlineStatusResponse {
+  CommonResponse response = 1;
+  bool online = 2;
+  string gateway_id = 3;
+  string connection_id = 4;
+}

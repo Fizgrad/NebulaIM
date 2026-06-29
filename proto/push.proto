@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package nebula.proto;
+
+import "common.proto";
+
+service PushService {
+  rpc PushToUser(PushToUserRequest) returns (PushToUserResponse);
+  rpc PushToGroup(PushToGroupRequest) returns (PushToGroupResponse);
+}
+
+message PushToUserRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  MessageData message = 3;
+}
+
+message PushToUserResponse {
+  CommonResponse response = 1;
+}
+
+message PushToGroupRequest {
+  string request_id = 1;
+  uint64 group_id = 2;
+  MessageData message = 3;
+}
+
+message PushToGroupResponse {
+  CommonResponse response = 1;
+  uint32 success_count = 2;
+  uint32 failed_count = 3;
+}

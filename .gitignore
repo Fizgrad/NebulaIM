@@ -1,0 +1,37 @@
+# Build
+build/
+build-docker/
+
+# IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+logs/
+
+# Runtime
+run/
+
+# CMake generated
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+CMakeFiles/
+compile_commands.json
+*.cmake
+!CMakeLists.txt
+
+# Object files
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.exe
+*.out
+
+# Editor
+*.swp
+*.swo
+*~

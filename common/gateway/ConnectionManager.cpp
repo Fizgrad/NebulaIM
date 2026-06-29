@@ -1,0 +1,108 @@
+#include "common/gateway/ConnectionManager.h"
+
+#include "common/utils/TimeUtil.h"
+
+namespace nebula {
+
+ConnectionManager::ConnectionManager(std::string gateway_id)
+    : gateway_id_(std::move(gateway_id)), next_conn_id_(1) {}
+
+std::string ConnectionManager::addConnection(const TcpConnectionPtr& conn, const std::string& peer_addr) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::string id = generateConnectionId();
+    int64_t now = TimeUtil::nowMs();
+    ConnectionContext ctx;
+    ctx.connection_id = id;
+    ctx.connected_at_ms = now;
+    ctx.last_active_ms = now;
+    ctx.peer_addr = peer_addr;
+    connections_[id] = conn;
+    contexts_[id] = ctx;
+    return id;
+}
+
+void ConnectionManager::removeConnection(const std::string& connection_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = contexts_.find(connection_id);
+    if (it != contexts_.end() && it->second.user_id != 0) {
+        auto uit = user_to_connection_.find(it->second.user_id);
+        if (uit != user_to_connection_.end() && uit->second == connection_id) user_to_connection_.erase(uit);
+    }
+    contexts_.erase(connection_id);
+    connections_.erase(connection_id);
+}
+
+bool ConnectionManager::bindUser(const std::string& connection_id, uint64_t user_id, const std::string& token) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = contexts_.find(connection_id);
+    if (it == contexts_.end()) return false;
+    it->second.user_id = user_id;
+    it->second.token = token;
+    it->second.authenticated = true;
+    it->second.last_active_ms = TimeUtil::nowMs();
+    user_to_connection_[user_id] = connection_id;
+    return true;
+}
+
+std::optional<ConnectionContext> ConnectionManager::getContext(const std::string& connection_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = contexts_.find(connection_id);
+    if (it == contexts_.end()) return std::nullopt;
+    return it->second;
+}
+
+std::optional<ConnectionContext> ConnectionManager::getContextByUserId(uint64_t user_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto uit = user_to_connection_.find(user_id);
+    if (uit == user_to_connection_.end()) return std::nullopt;
+    auto it = contexts_.find(uit->second);
+    if (it == contexts_.end()) return std::nullopt;
+    return it->second;
+}
+
+TcpConnectionPtr ConnectionManager::getConnection(const std::string& connection_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = connections_.find(connection_id);
+    return it == connections_.end() ? nullptr : it->second;
+}
+
+TcpConnectionPtr ConnectionManager::getConnectionByUserId(uint64_t user_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto uit = user_to_connection_.find(user_id);
+    if (uit == user_to_connection_.end()) return nullptr;
+    auto it = connections_.find(uit->second);
+    return it == connections_.end() ? nullptr : it->second;
+}
+
+bool ConnectionManager::updateActiveTime(const std::string& connection_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = contexts_.find(connection_id);
+    if (it == contexts_.end()) return false;
+    it->second.last_active_ms = TimeUtil::nowMs();
+    return true;
+}
+
+std::vector<std::string> ConnectionManager::getTimeoutConnections(int64_t now_ms, int64_t timeout_ms) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<std::string> ids;
+    for (const auto& item : contexts_) {
+        if (now_ms - item.second.last_active_ms > timeout_ms) ids.push_back(item.first);
+    }
+    return ids;
+}
+
+size_t ConnectionManager::connectionCount() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return connections_.size();
+}
+
+size_t ConnectionManager::onlineUserCount() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return user_to_connection_.size();
+}
+
+std::string ConnectionManager::generateConnectionId() {
+    return gateway_id_ + "-conn-" + std::to_string(next_conn_id_++);
+}
+
+}  // namespace nebula

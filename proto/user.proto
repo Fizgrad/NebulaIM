@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package nebula.proto;
+
+import "common.proto";
+
+service UserService {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+  rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoResponse);
+}
+
+message RegisterRequest {
+  string request_id = 1;
+  string username = 2;
+  string password = 3;
+  string nickname = 4;
+}
+
+message RegisterResponse {
+  CommonResponse response = 1;
+  uint64 user_id = 2;
+}
+
+message LoginRequest {
+  string request_id = 1;
+  string username = 2;
+  string password = 3;
+}
+
+message LoginResponse {
+  CommonResponse response = 1;
+  uint64 user_id = 2;
+  string token = 3;
+  int64 expire_at = 4;
+}
+
+message ValidateTokenRequest {
+  string request_id = 1;
+  string token = 2;
+}
+
+message ValidateTokenResponse {
+  CommonResponse response = 1;
+  bool valid = 2;
+  uint64 user_id = 3;
+}
+
+message GetUserInfoRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+}
+
+message GetUserInfoResponse {
+  CommonResponse response = 1;
+  UserInfo user = 2;
+}

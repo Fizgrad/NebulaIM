@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package nebula.proto;
+
+message CommonResponse {
+  int32 code = 1;
+  string message = 2;
+  string request_id = 3;
+}
+
+message UserInfo {
+  uint64 user_id = 1;
+  string username = 2;
+  string nickname = 3;
+  string avatar = 4;
+  int64 created_at = 5;
+}
+
+message PageRequest {
+  uint32 page = 1;
+  uint32 page_size = 2;
+}
+
+message PageResponse {
+  uint32 page = 1;
+  uint32 page_size = 2;
+  uint64 total = 3;
+}
+
+enum MessageContentType {
+  MESSAGE_CONTENT_TYPE_UNKNOWN = 0;
+  MESSAGE_CONTENT_TYPE_TEXT = 1;
+  MESSAGE_CONTENT_TYPE_IMAGE = 2;
+  MESSAGE_CONTENT_TYPE_FILE = 3;
+  MESSAGE_CONTENT_TYPE_AUDIO = 4;
+  MESSAGE_CONTENT_TYPE_VIDEO = 5;
+}
+
+enum MessageStatus {
+  MESSAGE_STATUS_UNKNOWN = 0;
+  MESSAGE_STATUS_SENT = 1;
+  MESSAGE_STATUS_DELIVERED = 2;
+  MESSAGE_STATUS_ACKED = 3;
+  MESSAGE_STATUS_FAILED = 4;
+}
+
+message MessageData {
+  uint64 message_id = 1;
+  uint64 conversation_id = 2;
+  uint64 from_user_id = 3;
+  uint64 to_user_id = 4;
+  uint64 group_id = 5;
+  MessageContentType content_type = 6;
+  string content = 7;
+  MessageStatus status = 8;
+  int64 timestamp = 9;
+}

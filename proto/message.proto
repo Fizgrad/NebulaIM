@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package nebula.proto;
+
+import "common.proto";
+
+service MessageService {
+  rpc SendSingleMessage(SendSingleMessageRequest) returns (SendSingleMessageResponse);
+  rpc SendGroupMessage(SendGroupMessageRequest) returns (SendGroupMessageResponse);
+  rpc AckMessage(AckMessageRequest) returns (AckMessageResponse);
+  rpc PullOfflineMessages(PullOfflineMessagesRequest) returns (PullOfflineMessagesResponse);
+}
+
+message SendSingleMessageRequest {
+  string request_id = 1;
+  uint64 from_user_id = 2;
+  uint64 to_user_id = 3;
+  MessageContentType content_type = 4;
+  string content = 5;
+  uint32 client_sequence_id = 6;
+}
+
+message SendSingleMessageResponse {
+  CommonResponse response = 1;
+  uint64 message_id = 2;
+  int64 server_timestamp = 3;
+}
+
+message SendGroupMessageRequest {
+  string request_id = 1;
+  uint64 from_user_id = 2;
+  uint64 group_id = 3;
+  MessageContentType content_type = 4;
+  string content = 5;
+  uint32 client_sequence_id = 6;
+}
+
+message SendGroupMessageResponse {
+  CommonResponse response = 1;
+  uint64 message_id = 2;
+  int64 server_timestamp = 3;
+}
+
+message AckMessageRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  uint64 message_id = 3;
+}
+
+message AckMessageResponse {
+  CommonResponse response = 1;
+}
+
+message PullOfflineMessagesRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  PageRequest page = 3;
+}
+
+message PullOfflineMessagesResponse {
+  CommonResponse response = 1;
+  repeated MessageData messages = 2;
+  PageResponse page = 3;
+}
