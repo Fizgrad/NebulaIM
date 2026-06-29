@@ -9,4 +9,4 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 : "${NEBULA_GRAFANA_PASSWORD:?set NEBULA_GRAFANA_PASSWORD}"
 
 cd "${ROOT}/deploy"
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d mysql redis kafka prometheus grafana
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d mysql redis kafka prometheus grafana jaeger

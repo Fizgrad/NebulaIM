@@ -50,7 +50,7 @@ void TraceSpan::setAttribute(std::string key, std::string value) {
 
 void TraceSpan::setError(std::string message) {
     if (!active_) return;
-    span_.status_code = "ERROR";
+    span_.status_code = "STATUS_CODE_ERROR";
     span_.status_message = std::move(message);
 }
 

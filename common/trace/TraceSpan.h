@@ -23,7 +23,7 @@ struct CompletedSpan {
     int64_t start_time_unix_nano = 0;
     int64_t end_time_unix_nano = 0;
     std::map<std::string, std::string> attributes;
-    std::string status_code = "OK";
+    std::string status_code = "STATUS_CODE_OK";
     std::string status_message;
 };
 
