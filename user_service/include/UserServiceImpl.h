@@ -31,6 +31,10 @@ public:
                              const proto::GetUserInfoRequest* request,
                              proto::GetUserInfoResponse* response) override;
 
+    grpc::Status GetUserByUsername(grpc::ServerContext* context,
+                                   const proto::GetUserByUsernameRequest* request,
+                                   proto::GetUserInfoResponse* response) override;
+
     grpc::Status Logout(grpc::ServerContext* context,
                         const proto::LogoutRequest* request,
                         proto::CommonResponse* response) override;

@@ -2,7 +2,7 @@
 
 ## Current Capability
 
-UserService is the auth/profile service backed by MySQL and Redis. It supports Register, Login, ValidateToken, GetUserInfo, Logout, and RefreshToken.
+UserService is the auth/profile service backed by MySQL and Redis. It supports Register, Login, ValidateToken, GetUserInfo, GetUserByUsername, Logout, and RefreshToken.
 
 ## Flow summary
 
@@ -28,6 +28,12 @@ GetUserInfo:
 
 ```text
 user_id -> UserDao getUserById -> public UserInfo
+```
+
+GetUserByUsername:
+
+```text
+username -> UserDao getUserByUsername -> public UserInfo
 ```
 
 Logout:

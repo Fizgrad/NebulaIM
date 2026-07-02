@@ -200,6 +200,30 @@ grpc::Status UserServiceImpl::GetUserInfo(grpc::ServerContext*,
     return grpc::Status::OK;
 }
 
+grpc::Status UserServiceImpl::GetUserByUsername(grpc::ServerContext*,
+                                                const proto::GetUserByUsernameRequest* request,
+                                                proto::GetUserInfoResponse* response) {
+    LOG_INFO("GetUserByUsername username=" + request->username());
+    if (user_dao_ == nullptr) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR);
+        return grpc::Status::OK;
+    }
+    if (request->username().empty()) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::USERNAME_EMPTY);
+        return grpc::Status::OK;
+    }
+
+    auto user = user_dao_->getUserByUsername(request->username());
+    if (!user.has_value()) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::USER_NOT_FOUND);
+        return grpc::Status::OK;
+    }
+
+    fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
+    fillUserInfo(response->mutable_user(), user.value());
+    return grpc::Status::OK;
+}
+
 grpc::Status UserServiceImpl::Logout(grpc::ServerContext*, const proto::LogoutRequest* request, proto::CommonResponse* response) {
     LOG_INFO("Logout token_prefix=" + tokenPrefix(request->token()));
     if (redis_client_ == nullptr || token_manager_ == nullptr) {

@@ -52,6 +52,15 @@ int main() {
     assert(info_resp.user().user_id() == register_resp.user_id());
     assert(info_resp.user().username() == username);
 
+    nebula::proto::GetUserByUsernameRequest username_req;
+    username_req.set_request_id("info-by-username-1");
+    username_req.set_username(username);
+    nebula::proto::GetUserInfoResponse username_resp;
+    assert(service.GetUserByUsername(&server_context, &username_req, &username_resp).ok());
+    assert(username_resp.response().code() == 0);
+    assert(username_resp.user().user_id() == register_resp.user_id());
+    assert(username_resp.user().username() == username);
+
     nebula::proto::LoginRequest bad_login_req;
     bad_login_req.set_request_id("bad-login");
     bad_login_req.set_username(username);

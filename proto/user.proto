@@ -9,6 +9,7 @@ service UserService {
   rpc Login(LoginRequest) returns (LoginResponse);
   rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
   rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoResponse);
+  rpc GetUserByUsername(GetUserByUsernameRequest) returns (GetUserInfoResponse);
   rpc Logout(LogoutRequest) returns (CommonResponse);
   rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
 }
@@ -55,6 +56,11 @@ message ValidateTokenResponse {
 message GetUserInfoRequest {
   string request_id = 1;
   uint64 user_id = 2;
+}
+
+message GetUserByUsernameRequest {
+  string request_id = 1;
+  string username = 2;
 }
 
 message GetUserInfoResponse {
