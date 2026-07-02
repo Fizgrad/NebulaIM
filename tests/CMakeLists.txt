@@ -230,6 +230,10 @@ if(NEBULA_ENABLE_STORAGE)
     target_link_libraries(test_conversation_dao PRIVATE nebula_common)
     add_test(NAME test_conversation_dao COMMAND test_conversation_dao WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
+    add_executable(test_conversation_service_helper test_conversation_service_helper.cpp)
+    target_link_libraries(test_conversation_service_helper PRIVATE nebula_common)
+    add_test(NAME test_conversation_service_helper COMMAND test_conversation_service_helper WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
     add_executable(test_friend_request_flow test_friend_request_flow.cpp)
     target_link_libraries(test_friend_request_flow PRIVATE nebula_common)
     add_test(NAME test_friend_request_flow COMMAND test_friend_request_flow WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
