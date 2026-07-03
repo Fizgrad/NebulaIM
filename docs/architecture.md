@@ -2,7 +2,7 @@
 
 ## Goal
 
-NebulaIM is a C++17/Linux distributed IM system designed to demonstrate production-oriented backend engineering: epoll/Reactor networking, high-concurrency TCP/WebSocket long connections, gRPC service boundaries, MySQL/Redis/Kafka integration, observability, tests, benchmarks, and deployable single-node infrastructure.
+NebulaIM is a C++17/Linux distributed IM system with epoll/Reactor networking, high-concurrency TCP/WebSocket long connections, gRPC service boundaries, MySQL/Redis/Kafka integration, observability, tests, benchmarks, and deployable single-node infrastructure.
 
 ## High-level topology
 

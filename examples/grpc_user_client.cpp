@@ -12,8 +12,8 @@ int main() {
 
     nebula::proto::LoginRequest login_req;
     login_req.set_request_id("example-login-1");
-    login_req.set_username("mock_user");
-    login_req.set_password("mock_password");
+    login_req.set_username("example_user");
+    login_req.set_password("example_password");
 
     nebula::proto::LoginResponse login_resp;
     grpc::ClientContext login_ctx;

@@ -9,7 +9,7 @@ NebulaIM gateway handles long-lived client TCP/WebSocket connections, while user
 - Protobuf defines compact binary message schemas and service contracts.
 - gRPC provides client/server stubs, transport, status handling, and service dispatch.
 
-Compared with HTTP JSON, Protobuf is smaller, faster to parse, strongly typed, and easier to evolve with backward-compatible field additions.
+Compared with HTTP JSON, Protobuf is smaller, faster to parse, strongly typed, and easier to evolve through explicit schema changes.
 
 ## Service architecture
 
@@ -110,7 +110,7 @@ Run Packet + Protobuf demo:
 ## Interview talking points
 
 1. gRPC avoids repeated JSON parse overhead and gives typed service contracts.
-2. Protobuf is compact, schema-driven, fast, and backward-compatible when fields are added safely.
+2. Protobuf is compact, schema-driven, fast, and explicit about schema evolution.
 3. proto3 removes required fields and has simpler defaults than proto2.
 4. gRPC supports unary, server streaming, client streaming, and bidirectional streaming.
 5. NebulaIM starts with unary RPC because request/response service calls are enough for initial auth/message/relation APIs.
