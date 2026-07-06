@@ -16,8 +16,10 @@
 #include "common/message/MessageDeduplicator.h"
 #include "common/message/MessageIdGenerator.h"
 #include "common/message/MessageKafkaPayload.h"
+#include "common/monitor/MetricsRegistry.h"
 #include "common/outbox/OutboxDao.h"
 #include "common/redis/RedisClient.h"
+#include "common/rpc/InternalRpcAuth.h"
 #include "common/rpc/RpcMetadata.h"
 #include "common/trace/TraceContext.h"
 #include "common/trace/TraceSpan.h"
@@ -32,6 +34,12 @@ void fillResponse(proto::CommonResponse* response, const std::string& request_id
     response->set_code(static_cast<int32_t>(code));
     response->set_message(message.empty() ? errorCodeToString(code) : message);
     response->set_request_id(request_id.empty() ? "request-id-empty" : request_id);
+}
+
+bool requireInternalRpc(grpc::ServerContext* context, const std::string& request_id, proto::CommonResponse* response) {
+    if (InternalRpcAuth::instance().authorize(context)) return true;
+    fillResponse(response, request_id, ErrorCode::AUTH_FAILED, "internal rpc unauthenticated");
+    return false;
 }
 
 proto::MessageData toMessageData(const MessageRecord& record) {
@@ -109,6 +117,7 @@ bool MessageServiceImpl::validateContent(const std::string& request_id, const st
 }
 
 grpc::Status MessageServiceImpl::SendSingleMessage(grpc::ServerContext* context, const proto::SendSingleMessageRequest* request, proto::SendSingleMessageResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     std::string inbound_trace = RpcMetadata::extractTraceId(context);
     TraceContext::Scope trace(TraceContext::ensureTraceId(inbound_trace.empty() ? request->request_id() : inbound_trace));
     TraceSpan span("message.SendSingleMessage", TraceSpanKind::SERVER);
@@ -116,6 +125,7 @@ grpc::Status MessageServiceImpl::SendSingleMessage(grpc::ServerContext* context,
     span.setAttribute("from_user_id", std::to_string(request->from_user_id()));
     span.setAttribute("to_user_id", std::to_string(request->to_user_id()));
     LOG_INFO("SendSingleMessage request_id=" + request->request_id() + " from=" + std::to_string(request->from_user_id()) + " to=" + std::to_string(request->to_user_id()));
+    MetricsRegistry::instance().counter("nebula_message_send_single_total", "MessageService single-message send requests").inc();
     if (invalidDeps()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     if (request->from_user_id() == 0 || request->to_user_id() == 0 || request->from_user_id() == request->to_user_id()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
     if (!validateContent(request->request_id(), request->content(), response->mutable_response())) return grpc::Status::OK;
@@ -167,10 +177,12 @@ grpc::Status MessageServiceImpl::SendSingleMessage(grpc::ServerContext* context,
     fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
     response->set_message_id(message_id);
     response->set_server_timestamp(now);
+    MetricsRegistry::instance().counter("nebula_message_send_single_success_total", "MessageService successful single-message sends").inc();
     return grpc::Status::OK;
 }
 
 grpc::Status MessageServiceImpl::SendGroupMessage(grpc::ServerContext* context, const proto::SendGroupMessageRequest* request, proto::SendGroupMessageResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     std::string inbound_trace = RpcMetadata::extractTraceId(context);
     TraceContext::Scope trace(TraceContext::ensureTraceId(inbound_trace.empty() ? request->request_id() : inbound_trace));
     TraceSpan span("message.SendGroupMessage", TraceSpanKind::SERVER);
@@ -178,6 +190,7 @@ grpc::Status MessageServiceImpl::SendGroupMessage(grpc::ServerContext* context, 
     span.setAttribute("from_user_id", std::to_string(request->from_user_id()));
     span.setAttribute("group_id", std::to_string(request->group_id()));
     LOG_INFO("SendGroupMessage request_id=" + request->request_id() + " from=" + std::to_string(request->from_user_id()) + " group=" + std::to_string(request->group_id()));
+    MetricsRegistry::instance().counter("nebula_message_send_group_total", "MessageService group-message send requests").inc();
     if (invalidDeps()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     if (request->from_user_id() == 0 || request->group_id() == 0) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
     if (!validateContent(request->request_id(), request->content(), response->mutable_response())) return grpc::Status::OK;
@@ -232,10 +245,13 @@ grpc::Status MessageServiceImpl::SendGroupMessage(grpc::ServerContext* context, 
     fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
     response->set_message_id(message_id);
     response->set_server_timestamp(now);
+    MetricsRegistry::instance().counter("nebula_message_send_group_success_total", "MessageService successful group-message sends").inc();
     return grpc::Status::OK;
 }
 
-grpc::Status MessageServiceImpl::AckMessage(grpc::ServerContext*, const proto::AckMessageRequest* request, proto::AckMessageResponse* response) {
+grpc::Status MessageServiceImpl::AckMessage(grpc::ServerContext* context, const proto::AckMessageRequest* request, proto::AckMessageResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
+    MetricsRegistry::instance().counter("nebula_message_ack_total", "MessageService ack requests").inc();
     if (invalidDeps()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     if (request->user_id() == 0 || request->message_id() == 0) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
     if (!user_dao_->getUserById(request->user_id()).has_value()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::USER_NOT_FOUND); return grpc::Status::OK; }
@@ -244,10 +260,13 @@ grpc::Status MessageServiceImpl::AckMessage(grpc::ServerContext*, const proto::A
     if (message_receipt_dao_ != nullptr) message_receipt_dao_->upsertDelivered(request->message_id(), request->user_id(), TimeUtil::nowMs());
     offline_message_dao_->markAsDelivered(request->user_id(), request->message_id());
     fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
+    MetricsRegistry::instance().counter("nebula_message_ack_success_total", "MessageService successful acks").inc();
     return grpc::Status::OK;
 }
 
-grpc::Status MessageServiceImpl::PullOfflineMessages(grpc::ServerContext*, const proto::PullOfflineMessagesRequest* request, proto::PullOfflineMessagesResponse* response) {
+grpc::Status MessageServiceImpl::PullOfflineMessages(grpc::ServerContext* context, const proto::PullOfflineMessagesRequest* request, proto::PullOfflineMessagesResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
+    MetricsRegistry::instance().counter("nebula_message_pull_offline_total", "MessageService pull-offline requests").inc();
     if (invalidDeps()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     if (request->user_id() == 0) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
     if (!user_dao_->getUserById(request->user_id()).has_value()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::USER_NOT_FOUND); return grpc::Status::OK; }
@@ -269,10 +288,13 @@ grpc::Status MessageServiceImpl::PullOfflineMessages(grpc::ServerContext*, const
     response->mutable_page()->set_page(request->page().page());
     response->mutable_page()->set_page_size(static_cast<uint32_t>(limit));
     response->mutable_page()->set_total(response->messages_size());
+    MetricsRegistry::instance().counter("nebula_message_pull_offline_success_total", "MessageService successful pull-offline requests").inc();
     return grpc::Status::OK;
 }
 
-grpc::Status MessageServiceImpl::MarkMessageRead(grpc::ServerContext*, const proto::MarkMessageReadRequest* request, proto::CommonResponse* response) {
+grpc::Status MessageServiceImpl::MarkMessageRead(grpc::ServerContext* context, const proto::MarkMessageReadRequest* request, proto::CommonResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response)) return grpc::Status::OK;
+    MetricsRegistry::instance().counter("nebula_message_mark_read_total", "MessageService mark-message-read requests").inc();
     if (invalidDeps() || message_receipt_dao_ == nullptr) { fillResponse(response, request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     if (request->user_id() == 0 || request->message_id() == 0) { fillResponse(response, request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
     auto record = message_dao_->getMessageById(request->message_id());
@@ -280,20 +302,25 @@ grpc::Status MessageServiceImpl::MarkMessageRead(grpc::ServerContext*, const pro
     if (!message_receipt_dao_->markRead(request->message_id(), request->user_id(), TimeUtil::nowMs())) { fillResponse(response, request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
     if (conversation_dao_ != nullptr) conversation_dao_->markRead(request->user_id(), record->conversation_id);
     fillResponse(response, request->request_id(), ErrorCode::OK, "OK");
+    MetricsRegistry::instance().counter("nebula_message_mark_read_success_total", "MessageService successful mark-message-read requests").inc();
     return grpc::Status::OK;
 }
 
-grpc::Status MessageServiceImpl::MarkConversationRead(grpc::ServerContext*, const proto::MarkConversationReadRequest* request, proto::CommonResponse* response) {
+grpc::Status MessageServiceImpl::MarkConversationRead(grpc::ServerContext* context, const proto::MarkConversationReadRequest* request, proto::CommonResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response)) return grpc::Status::OK;
+    MetricsRegistry::instance().counter("nebula_message_mark_conversation_read_total", "MessageService mark-conversation-read requests").inc();
     if (invalidDeps() || message_receipt_dao_ == nullptr) { fillResponse(response, request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     if (request->user_id() == 0 || request->conversation_id() == 0) { fillResponse(response, request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
     int64_t now = TimeUtil::nowMs();
     if (!message_receipt_dao_->markConversationRead(request->conversation_id(), request->user_id(), now)) { fillResponse(response, request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
     if (conversation_dao_ != nullptr) conversation_dao_->markRead(request->user_id(), request->conversation_id());
     fillResponse(response, request->request_id(), ErrorCode::OK, "OK");
+    MetricsRegistry::instance().counter("nebula_message_mark_conversation_read_success_total", "MessageService successful mark-conversation-read requests").inc();
     return grpc::Status::OK;
 }
 
-grpc::Status MessageServiceImpl::GetMessageReadState(grpc::ServerContext*, const proto::GetMessageReadStateRequest* request, proto::GetMessageReadStateResponse* response) {
+grpc::Status MessageServiceImpl::GetMessageReadState(grpc::ServerContext* context, const proto::GetMessageReadStateRequest* request, proto::GetMessageReadStateResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     if (message_receipt_dao_ == nullptr) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     if (request->message_id() == 0) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
     for (const auto& state : message_receipt_dao_->getReadState(request->message_id())) {
@@ -308,8 +335,10 @@ grpc::Status MessageServiceImpl::GetMessageReadState(grpc::ServerContext*, const
 }
 
 grpc::Status MessageServiceImpl::RecallMessage(grpc::ServerContext* context, const proto::RecallMessageRequest* request, proto::RecallMessageResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     std::string inbound_trace = RpcMetadata::extractTraceId(context);
     TraceContext::Scope trace(TraceContext::ensureTraceId(inbound_trace.empty() ? request->request_id() : inbound_trace));
+    MetricsRegistry::instance().counter("nebula_message_recall_total", "MessageService recall requests").inc();
     if (invalidDeps()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     if (request->user_id() == 0 || request->message_id() == 0) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
     auto record = message_dao_->getMessageById(request->message_id());
@@ -346,6 +375,7 @@ grpc::Status MessageServiceImpl::RecallMessage(grpc::ServerContext* context, con
     fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
     response->set_message_id(request->message_id());
     response->set_recalled_at(now);
+    MetricsRegistry::instance().counter("nebula_message_recall_success_total", "MessageService successful recalls").inc();
     return grpc::Status::OK;
 }
 

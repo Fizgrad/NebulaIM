@@ -81,15 +81,29 @@ bool MySqlConnectionPool::init(const MySqlConfig& config, size_t pool_size) {
 }
 
 MySqlConnectionPool::ConnectionGuard MySqlConnectionPool::acquire(int timeout_ms) {
-    std::unique_lock<std::mutex> lock(mutex_);
-    bool ok = cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this]() {
-        return stopped_ || !idle_.empty();
-    });
-    if (!ok || stopped_ || idle_.empty()) {
+    MySqlConnection* conn = nullptr;
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+        bool ok = cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this]() {
+            return stopped_ || !idle_.empty();
+        });
+        if (!ok || stopped_ || idle_.empty()) {
+            return ConnectionGuard(nullptr, nullptr);
+        }
+        conn = idle_.front();
+        idle_.pop();
+    }
+
+    if (!conn->ping() && !conn->reconnect()) {
+        LOG_ERROR("MySQL pool failed to reconnect stale connection: " + conn->lastError());
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!stopped_) {
+            idle_.push(conn);
+            cv_.notify_one();
+        }
         return ConnectionGuard(nullptr, nullptr);
     }
-    MySqlConnection* conn = idle_.front();
-    idle_.pop();
+
     return ConnectionGuard(this, conn);
 }
 

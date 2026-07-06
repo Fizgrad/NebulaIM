@@ -2,6 +2,7 @@
 
 #include "common/log/Logger.h"
 #include "common/rpc/GrpcClient.h"
+#include "common/rpc/InternalRpcAuth.h"
 #include "common/rpc/RpcMetadata.h"
 #include "common/trace/TraceContext.h"
 
@@ -30,6 +31,7 @@ bool GatewayClient::deliverToConnection(const std::string& request_id, uint64_t 
     proto::DeliverToConnectionResponse resp;
     grpc::ClientContext ctx;
     RpcMetadata::injectTraceId(&ctx, TraceContext::ensureTraceId(request_id));
+    InternalRpcAuth::instance().inject(&ctx);
     grpc::Status status = stub_->DeliverToConnection(&ctx, req, &resp);
     if (!status.ok() || resp.response().code() != 0) {
         breaker_.recordFailure();
@@ -50,6 +52,7 @@ bool GatewayClient::kickUser(const std::string& request_id, uint64_t user_id, co
     proto::KickUserResponse resp;
     grpc::ClientContext ctx;
     RpcMetadata::injectTraceId(&ctx, TraceContext::ensureTraceId(request_id));
+    InternalRpcAuth::instance().inject(&ctx);
     grpc::Status status = stub_->KickUser(&ctx, req, &resp);
     bool ok = status.ok() && resp.response().code() == 0;
     if (ok) breaker_.recordSuccess();
@@ -66,6 +69,7 @@ bool GatewayClient::getOnlineStatus(const std::string& request_id, uint64_t user
     proto::GetOnlineStatusResponse resp;
     grpc::ClientContext ctx;
     RpcMetadata::injectTraceId(&ctx, TraceContext::ensureTraceId(request_id));
+    InternalRpcAuth::instance().inject(&ctx);
     grpc::Status status = stub_->GetOnlineStatus(&ctx, req, &resp);
     if (!status.ok() || resp.response().code() != 0) {
         breaker_.recordFailure();

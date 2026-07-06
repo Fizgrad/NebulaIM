@@ -2,6 +2,7 @@
 #include "PushServiceImpl.h"
 
 #include "common/log/Logger.h"
+#include "common/monitor/MetricsRuntime.h"
 #include "common/rpc/GrpcTlsCredentials.h"
 
 #if defined(NEBULA_ENABLE_GRPC)
@@ -27,7 +28,8 @@ std::string parseConfigPath(int argc, char** argv) {
 int main(int argc, char* argv[]) {
 #if defined(NEBULA_ENABLE_GRPC) && defined(NEBULA_ENABLE_STORAGE)
     nebula::PushServiceContext context;
-    if (!context.init(parseConfigPath(argc, argv))) {
+    std::string config_path = parseConfigPath(argc, argv);
+    if (!context.init(config_path)) {
         LOG_ERROR("failed to init PushServiceContext");
         return 1;
     }
@@ -52,6 +54,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     LOG_INFO("PushService listening on " + context.listenAddress());
+    auto metrics_server = nebula::startMetricsServerFromConfig(config_path, "push_service", 9104);
     server->Wait();
     context.stopWorkers();
     return 0;

@@ -29,4 +29,12 @@ std::string RpcMetadata::extractAdminToken(const grpc::ServerContext* context) {
     return getMetadata(context, kAdminTokenKey);
 }
 
+void RpcMetadata::injectInternalToken(grpc::ClientContext* context, const std::string& token) {
+    if (context != nullptr && !token.empty()) context->AddMetadata(kInternalTokenKey, token);
+}
+
+std::string RpcMetadata::extractInternalToken(const grpc::ServerContext* context) {
+    return getMetadata(context, kInternalTokenKey);
+}
+
 }  // namespace nebula

@@ -294,3 +294,118 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 else()
     message(WARNING "Linux network tests are skipped on ${CMAKE_SYSTEM_NAME}")
 endif()
+
+set(NEBULA_MISSING_UNIT_TESTS
+    test_gateway_client
+)
+
+set(NEBULA_MISSING_INTEGRATION_TESTS
+    test_gateway_online_manager
+    test_online_status_manager
+    test_user_service_impl
+    test_user_service_integration
+    test_relation_service_impl
+    test_relation_service_integration
+    test_push_dispatcher
+    test_push_service_impl
+    test_push_worker
+    test_push_retry_manager
+    test_message_service_impl
+    test_message_service_integration
+    test_relation_dao_extra
+    test_group_dao_extra
+    test_mysql_pool
+    test_user_dao
+    test_message_dao
+    test_redis_client
+    test_kafka_producer
+    test_kafka_consumer
+    test_message_deduplicator
+)
+
+foreach(test_name IN LISTS NEBULA_MISSING_UNIT_TESTS NEBULA_MISSING_INTEGRATION_TESTS)
+    if(TARGET ${test_name})
+        add_test(NAME ${test_name} COMMAND ${test_name} WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+    endif()
+endforeach()
+
+set(NEBULA_UNIT_TESTS
+    test_logger
+    test_config
+    test_thread_pool
+    test_buffer
+    test_time_util
+    test_message_type
+    test_protocol_error
+    test_packet_codec
+    test_metrics_registry
+    test_metrics_http_server
+    test_connection_manager
+    test_gateway_packet_helper
+    test_gateway_router
+    test_gateway_service_impl
+    test_gateway_client_flow
+    test_gateway_client
+    test_message_id_generator
+    test_conversation_id
+    test_password_hasher
+    test_token_manager
+    test_websocket_handshake
+    test_websocket_codec
+    test_token_bucket
+    test_circuit_breaker
+    test_trace_context
+    test_service_discovery
+    test_grpc_tls_config
+    test_gateway_tls_config
+    test_protobuf_message
+    test_message_recall
+    test_read_receipt
+    test_admin_auth
+    test_grpc_user_service
+    test_inet_address
+    test_event_loop
+    test_timer_queue
+)
+
+set(NEBULA_INTEGRATION_TESTS
+    test_backend_final_e2e
+    test_gateway_online_manager
+    test_online_status_manager
+    test_user_service_impl
+    test_user_service_integration
+    test_relation_service_impl
+    test_relation_service_integration
+    test_push_dispatcher
+    test_push_service_impl
+    test_push_worker
+    test_push_retry_manager
+    test_outbox_dao
+    test_outbox_worker
+    test_conversation_dao
+    test_conversation_service_helper
+    test_friend_request_flow
+    test_message_service_impl
+    test_message_service_integration
+    test_relation_dao_extra
+    test_group_dao_extra
+    test_mysql_pool
+    test_user_dao
+    test_message_dao
+    test_redis_client
+    test_kafka_producer
+    test_kafka_consumer
+    test_message_deduplicator
+)
+
+foreach(test_name IN LISTS NEBULA_UNIT_TESTS)
+    if(TEST ${test_name})
+        set_tests_properties(${test_name} PROPERTIES LABELS unit)
+    endif()
+endforeach()
+
+foreach(test_name IN LISTS NEBULA_INTEGRATION_TESTS)
+    if(TEST ${test_name})
+        set_tests_properties(${test_name} PROPERTIES LABELS integration)
+    endif()
+endforeach()

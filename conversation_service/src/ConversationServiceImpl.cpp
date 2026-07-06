@@ -2,6 +2,7 @@
 
 #include "common/conversation/ConversationDao.h"
 #include "common/error/ErrorCode.h"
+#include "common/rpc/InternalRpcAuth.h"
 
 namespace nebula {
 
@@ -11,6 +12,12 @@ void fillResponse(proto::CommonResponse* response, const std::string& request_id
     response->set_code(static_cast<int32_t>(code));
     response->set_message(message.empty() ? errorCodeToString(code) : message);
     response->set_request_id(request_id.empty() ? "request-id-empty" : request_id);
+}
+
+bool requireInternalRpc(grpc::ServerContext* context, const std::string& request_id, proto::CommonResponse* response) {
+    if (InternalRpcAuth::instance().authorize(context)) return true;
+    fillResponse(response, request_id, ErrorCode::AUTH_FAILED, "internal rpc unauthenticated");
+    return false;
 }
 
 void fillConversation(proto::ConversationInfo* info, const Conversation& conv) {
@@ -33,7 +40,8 @@ void fillConversation(proto::ConversationInfo* info, const Conversation& conv) {
 
 ConversationServiceImpl::ConversationServiceImpl(ConversationDao* conversation_dao) : conversation_dao_(conversation_dao) {}
 
-grpc::Status ConversationServiceImpl::ListConversations(grpc::ServerContext*, const proto::ListConversationsRequest* request, proto::ListConversationsResponse* response) {
+grpc::Status ConversationServiceImpl::ListConversations(grpc::ServerContext* context, const proto::ListConversationsRequest* request, proto::ListConversationsResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     if (conversation_dao_ == nullptr) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     if (request->user_id() == 0) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
     size_t page_size = request->page().page_size() == 0 ? 50 : request->page().page_size();
@@ -48,28 +56,32 @@ grpc::Status ConversationServiceImpl::ListConversations(grpc::ServerContext*, co
     return grpc::Status::OK;
 }
 
-grpc::Status ConversationServiceImpl::MarkConversationRead(grpc::ServerContext*, const proto::ConversationMarkReadRequest* request, proto::CommonResponse* response) {
+grpc::Status ConversationServiceImpl::MarkConversationRead(grpc::ServerContext* context, const proto::ConversationMarkReadRequest* request, proto::CommonResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response)) return grpc::Status::OK;
     if (conversation_dao_ == nullptr) { fillResponse(response, request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     bool ok = conversation_dao_->markRead(request->user_id(), request->conversation_id());
     fillResponse(response, request->request_id(), ok ? ErrorCode::OK : ErrorCode::CONVERSATION_NOT_FOUND, ok ? "OK" : "");
     return grpc::Status::OK;
 }
 
-grpc::Status ConversationServiceImpl::DeleteConversation(grpc::ServerContext*, const proto::ConversationDeleteRequest* request, proto::CommonResponse* response) {
+grpc::Status ConversationServiceImpl::DeleteConversation(grpc::ServerContext* context, const proto::ConversationDeleteRequest* request, proto::CommonResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response)) return grpc::Status::OK;
     if (conversation_dao_ == nullptr) { fillResponse(response, request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     bool ok = conversation_dao_->deleteConversation(request->user_id(), request->conversation_id());
     fillResponse(response, request->request_id(), ok ? ErrorCode::OK : ErrorCode::CONVERSATION_NOT_FOUND, ok ? "OK" : "");
     return grpc::Status::OK;
 }
 
-grpc::Status ConversationServiceImpl::PinConversation(grpc::ServerContext*, const proto::ConversationPinRequest* request, proto::CommonResponse* response) {
+grpc::Status ConversationServiceImpl::PinConversation(grpc::ServerContext* context, const proto::ConversationPinRequest* request, proto::CommonResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response)) return grpc::Status::OK;
     if (conversation_dao_ == nullptr) { fillResponse(response, request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     bool ok = conversation_dao_->pinConversation(request->user_id(), request->conversation_id(), request->pinned());
     fillResponse(response, request->request_id(), ok ? ErrorCode::OK : ErrorCode::CONVERSATION_NOT_FOUND, ok ? "OK" : "");
     return grpc::Status::OK;
 }
 
-grpc::Status ConversationServiceImpl::MuteConversation(grpc::ServerContext*, const proto::ConversationMuteRequest* request, proto::CommonResponse* response) {
+grpc::Status ConversationServiceImpl::MuteConversation(grpc::ServerContext* context, const proto::ConversationMuteRequest* request, proto::CommonResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response)) return grpc::Status::OK;
     if (conversation_dao_ == nullptr) { fillResponse(response, request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
     bool ok = conversation_dao_->muteConversation(request->user_id(), request->conversation_id(), request->muted());
     fillResponse(response, request->request_id(), ok ? ErrorCode::OK : ErrorCode::CONVERSATION_NOT_FOUND, ok ? "OK" : "");

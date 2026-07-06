@@ -35,6 +35,7 @@ set(NEBULA_COMMON_SOURCES
     monitor/Metrics.cpp
     monitor/MetricsRegistry.cpp
     monitor/MetricsHttpServer.cpp
+    monitor/MetricsRuntime.cpp
     websocket/WebSocketFrame.cpp
     websocket/WebSocketHandshake.cpp
     websocket/WebSocketCodec.cpp
@@ -66,6 +67,7 @@ set(NEBULA_COMMON_SOURCES
     rpc/GrpcServer.cpp
     rpc/GrpcClient.cpp
     rpc/RpcMetadata.cpp
+    rpc/InternalRpcAuth.cpp
     rpc/GrpcTlsCredentials.cpp
     utils/TimeUtil.cpp
     error/ErrorCode.cpp

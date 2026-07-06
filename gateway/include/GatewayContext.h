@@ -48,6 +48,7 @@ public:
     GatewayOnlineManager* onlineManager();
     GatewayBackendClients* backendClients();
     GatewayRouter* router();
+    RpcExecutor* rpcExecutor();
     RedisClient* redisClient();
     PacketCodec* codec();
 

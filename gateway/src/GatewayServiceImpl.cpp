@@ -4,6 +4,7 @@
 #include "common/gateway/GatewayPacketHelper.h"
 #include "common/log/Logger.h"
 #include "common/net/TcpConnection.h"
+#include "common/rpc/InternalRpcAuth.h"
 #include "common/websocket/WebSocketCodec.h"
 
 #include <vector>
@@ -16,12 +17,19 @@ void fill(proto::CommonResponse* response, const std::string& request_id, ErrorC
     response->set_message(message.empty() ? errorCodeToString(code) : message);
     response->set_request_id(request_id.empty() ? "request-id-empty" : request_id);
 }
+
+bool requireInternalRpc(grpc::ServerContext* context, const std::string& request_id, proto::CommonResponse* response) {
+    if (InternalRpcAuth::instance().authorize(context)) return true;
+    fill(response, request_id, ErrorCode::AUTH_FAILED, "internal rpc unauthenticated");
+    return false;
+}
 }
 
 GatewayServiceImpl::GatewayServiceImpl(ConnectionManager* connection_manager, PacketCodec* codec, std::string gateway_id)
     : connection_manager_(connection_manager), codec_(codec), gateway_id_(std::move(gateway_id)) {}
 
-grpc::Status GatewayServiceImpl::DeliverToConnection(grpc::ServerContext*, const proto::DeliverToConnectionRequest* request, proto::DeliverToConnectionResponse* response) {
+grpc::Status GatewayServiceImpl::DeliverToConnection(grpc::ServerContext* context, const proto::DeliverToConnectionRequest* request, proto::DeliverToConnectionResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     if (connection_manager_ == nullptr || codec_ == nullptr || request->user_id() == 0 || request->connection_id().empty()) {
         fill(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT);
         return grpc::Status::OK;
@@ -53,7 +61,8 @@ grpc::Status GatewayServiceImpl::DeliverToConnection(grpc::ServerContext*, const
     return grpc::Status::OK;
 }
 
-grpc::Status GatewayServiceImpl::KickUser(grpc::ServerContext*, const proto::KickUserRequest* request, proto::KickUserResponse* response) {
+grpc::Status GatewayServiceImpl::KickUser(grpc::ServerContext* context, const proto::KickUserRequest* request, proto::KickUserResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     if (connection_manager_ != nullptr) {
         auto conns = connection_manager_->getConnectionsByUserId(request->user_id());
         for (const auto& conn : conns) {
@@ -64,7 +73,8 @@ grpc::Status GatewayServiceImpl::KickUser(grpc::ServerContext*, const proto::Kic
     return grpc::Status::OK;
 }
 
-grpc::Status GatewayServiceImpl::GetOnlineStatus(grpc::ServerContext*, const proto::GetOnlineStatusRequest* request, proto::GetOnlineStatusResponse* response) {
+grpc::Status GatewayServiceImpl::GetOnlineStatus(grpc::ServerContext* context, const proto::GetOnlineStatusRequest* request, proto::GetOnlineStatusResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     std::vector<ConnectionContext> contexts = connection_manager_ ? connection_manager_->getContextsByUserId(request->user_id()) : std::vector<ConnectionContext>{};
     fill(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
     if (!contexts.empty()) {

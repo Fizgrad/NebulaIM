@@ -1,6 +1,7 @@
 #include "UserServiceContext.h"
 
 #include "common/log/Logger.h"
+#include "common/rpc/InternalRpcAuth.h"
 #include "common/trace/TraceManager.h"
 
 namespace nebula {
@@ -15,6 +16,7 @@ bool UserServiceContext::init(const std::string& config_path) {
         LOG_ERROR("failed to load config: " + config_path);
         return false;
     }
+    InternalRpcAuth::instance().configureFromConfig(config_);
     TraceManager::instance().configure(TraceManager::configFrom(config_, "nebula-user-service"));
 
     MySqlConfig mysql;

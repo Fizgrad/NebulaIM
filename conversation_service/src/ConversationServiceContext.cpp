@@ -1,12 +1,14 @@
 #include "ConversationServiceContext.h"
 
 #include "common/log/Logger.h"
+#include "common/rpc/InternalRpcAuth.h"
 #include "common/trace/TraceManager.h"
 
 namespace nebula {
 
 bool ConversationServiceContext::init(const std::string& config_path) {
     if (!config_.loadFromFile(config_path)) return false;
+    InternalRpcAuth::instance().configureFromConfig(config_);
     TraceManager::instance().configure(TraceManager::configFrom(config_, "nebula-conversation-service"));
     MySqlConfig mysql;
     mysql.host = config_.getString("mysql.host", mysql.host);

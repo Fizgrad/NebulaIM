@@ -3,6 +3,7 @@
 #include "common/error/ErrorCode.h"
 #include "common/gateway/GatewayPacketHelper.h"
 #include "common/log/Logger.h"
+#include "common/monitor/MetricsRegistry.h"
 #include "common/net/EventLoop.h"
 #include "common/net/TcpConnection.h"
 #include "common/utils/TimeUtil.h"
@@ -49,17 +50,20 @@ void GatewayServer::onConnection(const TcpConnectionPtr& conn) {
             std::lock_guard<std::mutex> lock(conn_id_mutex_);
             websocket_connections_[conn->name()] = false;
         }
+        MetricsRegistry::instance().counter("nebula_gateway_connections_total", "Gateway accepted connections").inc();
+        MetricsRegistry::instance().gauge("nebula_gateway_active_connections", "Gateway active connections").inc();
         LOG_INFO("gateway connection established id=" + id);
     } else {
         std::string id = getConnectionIdFromConnection(conn);
         auto ctx = connection_manager_->getContext(id);
         if (ctx.has_value() && ctx->authenticated) {
-            online_manager_->setOffline(ctx->user_id, ctx->device_id, id);
+            online_manager_->setOfflineAsync(ctx->user_id, ctx->device_id, id);
         }
         connection_manager_->removeConnection(id);
         std::lock_guard<std::mutex> lock(conn_id_mutex_);
         conn_name_to_id_.erase(conn->name());
         websocket_connections_.erase(conn->name());
+        MetricsRegistry::instance().gauge("nebula_gateway_active_connections", "Gateway active connections").dec();
         LOG_INFO("gateway connection closed id=" + id);
     }
 }
@@ -82,6 +86,7 @@ void GatewayServer::onMessage(const TcpConnectionPtr& conn, Buffer* buffer) {
         websocket = true;
     }
     if (!rate_limiter_.allowPacket(id)) {
+        MetricsRegistry::instance().counter("nebula_gateway_rate_limited_total", "Gateway requests rejected by rate limiting").inc();
         Packet error = GatewayPacketHelper::makeErrorResponse(0, static_cast<int>(ErrorCode::RATE_LIMITED), "rate limited", "");
         sendPacket(conn, error);
         return;

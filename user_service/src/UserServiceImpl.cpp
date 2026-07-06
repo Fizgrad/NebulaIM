@@ -5,7 +5,9 @@
 #include "common/dao/UserDao.h"
 #include "common/error/ErrorCode.h"
 #include "common/log/Logger.h"
+#include "common/monitor/MetricsRegistry.h"
 #include "common/redis/RedisClient.h"
+#include "common/rpc/InternalRpcAuth.h"
 #include "common/utils/TimeUtil.h"
 
 namespace nebula {
@@ -16,6 +18,12 @@ void fillResponse(proto::CommonResponse* response, const std::string& request_id
     response->set_code(static_cast<int32_t>(code));
     response->set_message(message.empty() ? errorCodeToString(code) : message);
     response->set_request_id(request_id.empty() ? "request-id-empty" : request_id);
+}
+
+bool requireInternalRpc(grpc::ServerContext* context, const std::string& request_id, proto::CommonResponse* response) {
+    if (InternalRpcAuth::instance().authorize(context)) return true;
+    fillResponse(response, request_id, ErrorCode::AUTH_FAILED, "internal rpc unauthenticated");
+    return false;
 }
 
 void fillUserInfo(proto::UserInfo* info, const User& user) {
@@ -44,10 +52,12 @@ UserServiceImpl::UserServiceImpl(UserDao* user_dao,
       token_manager_(token_manager),
       password_min_length_(password_min_length > 0 ? password_min_length : 6) {}
 
-grpc::Status UserServiceImpl::Register(grpc::ServerContext*,
+grpc::Status UserServiceImpl::Register(grpc::ServerContext* context,
                                        const proto::RegisterRequest* request,
                                        proto::RegisterResponse* response) {
     LOG_INFO("Register username=" + request->username());
+    MetricsRegistry::instance().counter("nebula_user_register_total", "UserService register requests").inc();
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     if (user_dao_ == nullptr) {
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR);
         return grpc::Status::OK;
@@ -95,13 +105,16 @@ grpc::Status UserServiceImpl::Register(grpc::ServerContext*,
 
     fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
     response->set_user_id(user_id);
+    MetricsRegistry::instance().counter("nebula_user_register_success_total", "UserService successful registrations").inc();
     return grpc::Status::OK;
 }
 
-grpc::Status UserServiceImpl::Login(grpc::ServerContext*,
+grpc::Status UserServiceImpl::Login(grpc::ServerContext* context,
                                     const proto::LoginRequest* request,
                                     proto::LoginResponse* response) {
     LOG_INFO("Login username=" + request->username());
+    MetricsRegistry::instance().counter("nebula_user_login_total", "UserService login requests").inc();
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     if (user_dao_ == nullptr || redis_client_ == nullptr || token_manager_ == nullptr) {
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR);
         return grpc::Status::OK;
@@ -118,6 +131,7 @@ grpc::Status UserServiceImpl::Login(grpc::ServerContext*,
     auto user = user_dao_->getUserByUsername(request->username());
     if (!user.has_value() || !PasswordHasher::verifyPassword(request->password(), user->password_hash)) {
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::AUTH_FAILED, "auth failed");
+        MetricsRegistry::instance().counter("nebula_user_login_failed_total", "UserService failed logins").inc();
         return grpc::Status::OK;
     }
 
@@ -136,13 +150,15 @@ grpc::Status UserServiceImpl::Login(grpc::ServerContext*,
     response->set_user_id(user->id);
     response->set_token(token);
     response->set_expire_at(token_manager_->expireAtMs());
+    MetricsRegistry::instance().counter("nebula_user_login_success_total", "UserService successful logins").inc();
     return grpc::Status::OK;
 }
 
-grpc::Status UserServiceImpl::ValidateToken(grpc::ServerContext*,
+grpc::Status UserServiceImpl::ValidateToken(grpc::ServerContext* context,
                                             const proto::ValidateTokenRequest* request,
                                             proto::ValidateTokenResponse* response) {
     LOG_INFO("ValidateToken token_prefix=" + tokenPrefix(request->token()));
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     if (redis_client_ == nullptr || token_manager_ == nullptr) {
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR);
         return grpc::Status::OK;
@@ -176,10 +192,11 @@ grpc::Status UserServiceImpl::ValidateToken(grpc::ServerContext*,
     return grpc::Status::OK;
 }
 
-grpc::Status UserServiceImpl::GetUserInfo(grpc::ServerContext*,
+grpc::Status UserServiceImpl::GetUserInfo(grpc::ServerContext* context,
                                           const proto::GetUserInfoRequest* request,
                                           proto::GetUserInfoResponse* response) {
     LOG_INFO("GetUserInfo user_id=" + std::to_string(request->user_id()));
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     if (user_dao_ == nullptr) {
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR);
         return grpc::Status::OK;
@@ -200,10 +217,11 @@ grpc::Status UserServiceImpl::GetUserInfo(grpc::ServerContext*,
     return grpc::Status::OK;
 }
 
-grpc::Status UserServiceImpl::GetUserByUsername(grpc::ServerContext*,
+grpc::Status UserServiceImpl::GetUserByUsername(grpc::ServerContext* context,
                                                 const proto::GetUserByUsernameRequest* request,
                                                 proto::GetUserInfoResponse* response) {
     LOG_INFO("GetUserByUsername username=" + request->username());
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     if (user_dao_ == nullptr) {
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR);
         return grpc::Status::OK;
@@ -224,8 +242,9 @@ grpc::Status UserServiceImpl::GetUserByUsername(grpc::ServerContext*,
     return grpc::Status::OK;
 }
 
-grpc::Status UserServiceImpl::Logout(grpc::ServerContext*, const proto::LogoutRequest* request, proto::CommonResponse* response) {
+grpc::Status UserServiceImpl::Logout(grpc::ServerContext* context, const proto::LogoutRequest* request, proto::CommonResponse* response) {
     LOG_INFO("Logout token_prefix=" + tokenPrefix(request->token()));
+    if (!requireInternalRpc(context, request->request_id(), response)) return grpc::Status::OK;
     if (redis_client_ == nullptr || token_manager_ == nullptr) {
         fillResponse(response, request->request_id(), ErrorCode::INTERNAL_ERROR);
         return grpc::Status::OK;
@@ -243,8 +262,9 @@ grpc::Status UserServiceImpl::Logout(grpc::ServerContext*, const proto::LogoutRe
     return grpc::Status::OK;
 }
 
-grpc::Status UserServiceImpl::RefreshToken(grpc::ServerContext*, const proto::RefreshTokenRequest* request, proto::RefreshTokenResponse* response) {
+grpc::Status UserServiceImpl::RefreshToken(grpc::ServerContext* context, const proto::RefreshTokenRequest* request, proto::RefreshTokenResponse* response) {
     LOG_INFO("RefreshToken token_prefix=" + tokenPrefix(request->token()));
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     if (redis_client_ == nullptr || token_manager_ == nullptr) {
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR);
         return grpc::Status::OK;

@@ -286,6 +286,9 @@ grpc::Status AdminServiceImpl::ValidateConfig(grpc::ServerContext* context,
     if (!runtime_config_.grpc_tls_enabled) {
         addConfigIssue(response, "WARN", "grpc.tls.enabled", "internal gRPC TLS is disabled; keep RPC ports bound to loopback or protected by firewall");
     }
+    if (!runtime_config_.internal_rpc_auth_enabled) {
+        addConfigIssue(response, "WARN", "internal_rpc.auth.enabled", "internal RPC token authentication is disabled");
+    }
     if (!runtime_config_.gateway_tls_enabled &&
         runtime_config_.gateway_tcp_host != "127.0.0.1" &&
         runtime_config_.gateway_tcp_host != "localhost") {

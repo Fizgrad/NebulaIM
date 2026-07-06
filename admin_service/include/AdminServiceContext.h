@@ -30,6 +30,7 @@ struct AdminRuntimeConfig {
     bool admin_auth_enabled = false;
     bool grpc_tls_enabled = false;
     bool gateway_tls_enabled = false;
+    bool internal_rpc_auth_enabled = false;
     bool trace_enabled = false;
     std::string trace_otlp_endpoint;
     std::vector<std::pair<std::string, std::string>> service_addresses;

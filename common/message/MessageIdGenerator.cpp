@@ -19,15 +19,30 @@ MessageIdGenerator::MessageIdGenerator(uint16_t node_id)
 uint64_t MessageIdGenerator::nextId() {
     std::lock_guard<std::mutex> lock(mutex_);
     uint64_t now = currentMs();
+    if (now < kEpochMs) {
+        now = kEpochMs;
+    }
     if (now < last_timestamp_ms_) {
         waitNextMs(last_timestamp_ms_);
         now = currentMs();
+        if (now < kEpochMs) {
+            now = kEpochMs;
+        }
+        if (now <= last_timestamp_ms_) {
+            now = last_timestamp_ms_ + 1;
+        }
     }
     if (now == last_timestamp_ms_) {
         sequence_ = (sequence_ + 1) & kSequenceMask;
         if (sequence_ == 0) {
             waitNextMs(last_timestamp_ms_);
             now = currentMs();
+            if (now < kEpochMs) {
+                now = kEpochMs;
+            }
+            if (now <= last_timestamp_ms_) {
+                now = last_timestamp_ms_ + 1;
+            }
         }
     } else {
         sequence_ = 0;
@@ -42,7 +57,9 @@ uint64_t MessageIdGenerator::currentMs() const {
 }
 
 void MessageIdGenerator::waitNextMs(uint64_t last_ms) {
-    while (currentMs() <= last_ms) {
+    while (true) {
+        uint64_t now = currentMs();
+        if (now < kEpochMs || now > last_ms) return;
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }

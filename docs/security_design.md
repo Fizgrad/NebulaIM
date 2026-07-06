@@ -1,6 +1,6 @@
 # Security Design
 
-Passwords are hashed before storage. Token values live in Redis with TTL and can be explicitly deleted on logout. `RefreshToken` validates the old token, creates a new token, and invalidates the old token.
+Passwords are hashed before storage. Token values live in Redis with TTL and can be explicitly deleted on logout. Redis token keys use `SHA-256(token)` rather than the raw bearer token. `RefreshToken` validates the old token, creates a new token, and invalidates the old token.
 
 Message size is bounded by protocol body length and message content length. WebSocket frame parsing validates mask rules, length encoding, opcodes, and rejects unsupported fragmentation. Browser clients must use binary frames containing NebulaIM Packet bytes; JSON/text frames are not accepted by Gateway.
 
@@ -17,6 +17,16 @@ admin_service.admin_tokens=ops:sha256:<token_sha256_hex>:health,stats,outbox;mai
 ```
 
 Supported scopes are `health`, `stats`, `outbox`, `kafka`, `cleanup`, and `*`. AdminService writes allow/deny audit log lines with action, scope, principal, and request_id. Config stores SHA-256 token hashes, not raw operational tokens.
+
+Internal business gRPC can also require a shared service token:
+
+```text
+internal_rpc.auth.enabled=true
+internal_rpc.auth.token=<raw-token-used-by-internal-clients>
+internal_rpc.auth.token_sha256=<sha256-of-raw-token>
+```
+
+When enabled, Gateway injects `x-nebula-internal-token` for UserService/MessageService calls, PushService injects it for GatewayService calls, and UserService/RelationService/ConversationService/MessageService/PushService/GatewayService reject missing or invalid metadata. This complements loopback binding, firewall rules, and optional gRPC TLS/mTLS.
 
 Trace IDs are propagated through gRPC metadata key `x-nebula-trace-id`. Spans can be exported to Jaeger through OTLP/HTTP. Trace IDs are intentionally not Prometheus labels to avoid high-cardinality metrics.
 

@@ -18,6 +18,7 @@ private:
     int ttl_seconds_;
 
     static std::string randomHex(size_t bytes);
+    static std::string sha256Hex(const std::string& input);
 };
 
 }  // namespace nebula

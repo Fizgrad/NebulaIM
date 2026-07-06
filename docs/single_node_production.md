@@ -60,7 +60,7 @@ sudo editor /etc/nebulaim/nebula.conf
 ./scripts/validate_prod_config.sh /etc/nebulaim/nebula.conf
 ```
 
-The production validator fails on bundled development admin token hashes, `CHANGE_ME` values, empty Redis password, default MySQL password, and public internal RPC bindings without gRPC TLS.
+The production validator fails on bundled development admin token hashes, `CHANGE_ME` values, empty Redis password, default MySQL password, invalid internal RPC token/hash settings, and public internal RPC bindings without gRPC TLS.
 
 ## Install Services
 

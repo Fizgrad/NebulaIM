@@ -54,7 +54,8 @@ private:
     MySqlConnectionPool mysql_pool_;
     std::unique_ptr<RedisClient> redis_client_;
     std::unique_ptr<KafkaProducer> kafka_producer_;
-    std::unique_ptr<KafkaConsumer> kafka_consumer_;
+    KafkaConsumerConfig kafka_consumer_config_;
+    std::vector<std::unique_ptr<KafkaConsumer>> kafka_consumers_;
     std::unique_ptr<OfflineMessageDao> offline_message_dao_;
     std::unique_ptr<GroupDao> group_dao_;
     std::unique_ptr<OnlineStatusManager> online_status_manager_;

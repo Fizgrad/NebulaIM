@@ -1,12 +1,14 @@
 #include "AdminServiceContext.h"
 
 #include "common/log/Logger.h"
+#include "common/rpc/InternalRpcAuth.h"
 #include "common/trace/TraceManager.h"
 
 namespace nebula {
 
 bool AdminServiceContext::init(const std::string& config_path) {
     if (!config_.loadFromFile(config_path)) return false;
+    InternalRpcAuth::instance().configureFromConfig(config_);
     TraceManager::instance().configure(TraceManager::configFrom(config_, "nebula-admin-service"));
     std::string host = config_.getString("admin_service.host", "0.0.0.0");
     int port = config_.getInt("admin_service.port", 50057);
@@ -16,6 +18,7 @@ bool AdminServiceContext::init(const std::string& config_path) {
     runtime_config_.admin_auth_enabled = admin_auth_.enabled();
     runtime_config_.grpc_tls_enabled = grpc_tls_config_.enabled;
     runtime_config_.gateway_tls_enabled = config_.getBool("gateway.tls.enabled", false);
+    runtime_config_.internal_rpc_auth_enabled = config_.getBool("internal_rpc.auth.enabled", false);
     runtime_config_.trace_enabled = config_.getBool("trace.enabled", false);
     runtime_config_.trace_otlp_endpoint = config_.getString("trace.otlp_endpoint", "");
     runtime_config_.gateway_tcp_host = config_.getString("gateway.tcp.host", "127.0.0.1");

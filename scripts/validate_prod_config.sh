@@ -119,6 +119,16 @@ if [[ "$(get_cfg trace.enabled)" == "true" && -z "$(get_cfg trace.otlp_endpoint)
     fail "trace.enabled=true requires trace.otlp_endpoint"
 fi
 
+if [[ "$(get_cfg internal_rpc.auth.enabled)" == "true" ]]; then
+    internal_token="$(get_cfg internal_rpc.auth.token)"
+    internal_token_sha="$(get_cfg internal_rpc.auth.token_sha256)"
+    [[ -n "${internal_token}" && "${internal_token}" != CHANGE_ME* ]] || fail "internal_rpc.auth.token must be set when internal RPC auth is enabled"
+    [[ "${internal_token_sha}" =~ ^[0-9a-fA-F]{64}$ ]] || fail "internal_rpc.auth.token_sha256 must be a 64-hex SHA-256 digest"
+    if [[ "${internal_token_sha}" == CHANGE_ME* ]]; then
+        fail "internal_rpc.auth.token_sha256 still contains CHANGE_ME"
+    fi
+fi
+
 if (( errors > 0 )); then
     echo "[config] validation failed: ${errors} error(s), ${warnings} warning(s)" >&2
     exit 1

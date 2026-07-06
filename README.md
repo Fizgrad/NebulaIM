@@ -33,7 +33,7 @@ AdminService --> health / cleanup / online stats / outbox stats / Kafka lag / co
 3. Gateway long-connection access and backend gRPC routing.
 4. UserService with MySQL + Redis token auth.
 5. MessageService with message_id, dedup, MySQL persistence, conversation update, and Outbox Pattern.
-6. PushService with Kafka manual commit after successful handling, Redis multi-device online status, Gateway RPC, offline messages, retry, DLQ.
+6. PushService with Kafka manual commit after successful handling, multi-consumer worker support, Redis multi-device online status, Gateway RPC, offline messages, retry, DLQ.
 7. MySQL persistence for users, relations, groups, messages, offline messages.
 8. Redis for token, online state, dedup, retry.
 9. Prometheus/Grafana monitoring assets.
@@ -132,6 +132,8 @@ UserService 9101
 MessageService 9102
 RelationService 9103
 PushService 9104
+ConversationService 9105
+AdminService 9106
 ```
 
 ## Backend Feature Matrix
@@ -143,6 +145,7 @@ PushService 9104
 | Gateway async backend RPC | Implemented with bounded RpcExecutor thread pool |
 | Outbox Pattern | Implemented for message send and recall publication paths |
 | Kafka consumer safety | PushService disables auto commit and commits offsets after successful handling |
+| Kafka producer safety | KafkaProducer waits for delivery callback acknowledgement |
 | Friend requests | Implemented in RelationService proto/DAO/service; direct AddFriend is rejected in production path |
 | Conversation list | Implemented with ConversationDao and ConversationService |
 | Delivered/read semantics | ACK marks delivered; read RPCs mark read |
@@ -153,6 +156,7 @@ PushService 9104
 | Circuit breaker | Gateway and Push gateway-client paths use circuit breaker primitives |
 | Service discovery | Static resolver abstraction for Gateway/Push clients |
 | Admin security | Scoped SHA-256 admin tokens, metadata auth, audit logs, HealthCheck, real online stats, outbox stats, and Kafka lag |
+| Internal RPC security | Optional `x-nebula-internal-token` metadata auth across Gateway/User/Relation/Conversation/Message/Push RPC surfaces |
 | gRPC TLS/mTLS | Config-driven server/client credentials; disabled by default for local dev |
 | Gateway native TLS | Optional TLS for the TCP/WebSocket Gateway listener through `gateway.tls.*`; edge TLS via Nginx remains supported |
 | Tracing | TraceId/TraceContext, span wrapper, lightweight OTLP/HTTP exporter, Jaeger Compose service; trace IDs are not Prometheus labels |
@@ -174,9 +178,14 @@ PushService 9104
 
 ```bash
 ./scripts/run_tests.sh --unit-only
+ctest --test-dir build -L unit --output-on-failure
 ```
 
-For integration tests, start dependencies first.
+For integration tests, start dependencies first, then run:
+
+```bash
+ctest --test-dir build -L integration --output-on-failure
+```
 
 Full backend E2E is opt-in so normal `ctest` remains usable without running services:
 

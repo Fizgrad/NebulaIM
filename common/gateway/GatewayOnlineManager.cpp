@@ -3,10 +3,22 @@
 #include "common/log/Logger.h"
 #include "common/redis/RedisClient.h"
 
+#include <exception>
+#include <utility>
+
 namespace nebula {
 
 GatewayOnlineManager::GatewayOnlineManager(RedisClient* redis_client, std::string gateway_id, int online_ttl_seconds)
-    : redis_client_(redis_client), gateway_id_(std::move(gateway_id)), online_ttl_seconds_(online_ttl_seconds > 0 ? online_ttl_seconds : 60) {}
+    : redis_client_(redis_client),
+      gateway_id_(std::move(gateway_id)),
+      online_ttl_seconds_(online_ttl_seconds > 0 ? online_ttl_seconds : 60),
+      online_worker_(1, 10000) {
+    online_worker_.start();
+}
+
+GatewayOnlineManager::~GatewayOnlineManager() {
+    online_worker_.stop();
+}
 
 bool GatewayOnlineManager::setOnline(uint64_t user_id, const std::string& device_id, const std::string& connection_id) {
     if (redis_client_ == nullptr || user_id == 0 || device_id.empty() || connection_id.empty()) return false;
@@ -41,6 +53,26 @@ bool GatewayOnlineManager::setOffline(uint64_t user_id, const std::string& devic
              " device_id=" + device_id +
              " connection_id=" + connection_id);
     return true;
+}
+
+void GatewayOnlineManager::refreshOnlineAsync(uint64_t user_id, std::string device_id, std::string connection_id) {
+    submitOnlineTask([this, user_id, device_id = std::move(device_id), connection_id = std::move(connection_id)]() {
+        refreshOnline(user_id, device_id, connection_id);
+    });
+}
+
+void GatewayOnlineManager::setOfflineAsync(uint64_t user_id, std::string device_id, std::string connection_id) {
+    submitOnlineTask([this, user_id, device_id = std::move(device_id), connection_id = std::move(connection_id)]() {
+        setOffline(user_id, device_id, connection_id);
+    });
+}
+
+void GatewayOnlineManager::submitOnlineTask(std::function<void()> task) {
+    try {
+        online_worker_.submit(std::move(task));
+    } catch (const std::exception& ex) {
+        LOG_ERROR(std::string("gateway online async task rejected: ") + ex.what());
+    }
 }
 
 std::string GatewayOnlineManager::devicesKey(uint64_t user_id) const { return "nebula:user:devices:" + std::to_string(user_id); }

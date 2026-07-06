@@ -27,6 +27,7 @@ public:
     bool connect(const MySqlConfig& config);
     void close();
     bool reconnect();
+    bool ping();
 
     bool executeUpdate(const std::string& sql);
     std::unique_ptr<MySqlResult> executeQuery(const std::string& sql);
@@ -44,6 +45,8 @@ public:
     std::string lastError() const;
 
 private:
+    void markDisconnectedIfNeeded(unsigned int error_code);
+
     void* mysql_;
     MySqlConfig config_;
     bool connected_;

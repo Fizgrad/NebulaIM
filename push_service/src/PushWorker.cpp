@@ -2,6 +2,7 @@
 
 #include "common/log/Logger.h"
 #include "common/message/MessageKafkaPayload.h"
+#include "common/monitor/MetricsRegistry.h"
 #include "common/push/PushDispatcher.h"
 #include "common/trace/TraceContext.h"
 #include "common/trace/TraceSpan.h"
@@ -32,17 +33,25 @@ void PushWorker::run() {
         KafkaMessage message = consumer_->poll(options_.poll_timeout_ms);
         if (!running_) break;
         if (!message.valid) continue;
+        MetricsRegistry::instance().counter("nebula_push_kafka_consume_total", "PushService Kafka messages consumed").inc();
         LOG_INFO("PushWorker polled topic=" + message.topic +
                  " partition=" + std::to_string(message.partition) +
                  " offset=" + std::to_string(message.offset) +
                  " payload_bytes=" + std::to_string(message.payload.size()));
         if (handleKafkaMessage(message)) {
+            MetricsRegistry::instance().counter("nebula_push_kafka_handle_success_total", "PushService Kafka messages handled successfully").inc();
             bool committed = consumer_->commit(message);
+            if (committed) {
+                MetricsRegistry::instance().counter("nebula_push_kafka_commit_total", "PushService Kafka offsets committed").inc();
+            } else {
+                MetricsRegistry::instance().counter("nebula_push_kafka_commit_failed_total", "PushService Kafka offset commit failures").inc();
+            }
             LOG_INFO("PushWorker handled topic=" + message.topic +
                      " partition=" + std::to_string(message.partition) +
                      " offset=" + std::to_string(message.offset) +
                      " committed=" + (committed ? "true" : "false"));
         } else {
+            MetricsRegistry::instance().counter("nebula_push_kafka_handle_failed_total", "PushService Kafka message handle failures").inc();
             LOG_ERROR("PushWorker message handling failed topic=" + message.topic +
                       " partition=" + std::to_string(message.partition) +
                       " offset=" + std::to_string(message.offset));

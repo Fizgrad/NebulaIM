@@ -17,6 +17,8 @@
 | MessageService Metrics | 9102 |
 | RelationService Metrics | 9103 |
 | PushService Metrics | 9104 |
+| ConversationService Metrics | 9105 |
+| AdminService Metrics | 9106 |
 | Prometheus | 9090 |
 | Grafana | 3000 |
 | Jaeger UI | 16686 |
@@ -36,7 +38,7 @@
 ./scripts/health_check.sh config/nebula.conf
 ```
 
-Local `start_services.sh` launches services with `setsid nohup`, writes logs to `logs/`, writes pids to `run/`, and fails fast if a process exits immediately after start.
+Local `start_services.sh` waits for each service dependency through `wait_ready.sh`, launches services with `setsid nohup`, writes logs to `logs/`, writes pids to `run/`, and fails fast if a process exits immediately after start. When `NEBULA_ENV=prod`, it refuses to use `config/nebula.conf` and runs `validate_prod_config.sh` before starting.
 
 For single-node production with systemd/Nginx/backups, use `docs/single_node_production.md` instead of the local `start_services.sh` workflow.
 
@@ -47,6 +49,16 @@ admin_service.admin_tokens=ops:sha256:<token_sha256_hex>:health,stats,outbox,kaf
 ```
 
 Admin clients must send the raw token through gRPC metadata key `x-nebula-admin-token`. Each AdminService RPC emits an audit log line with action, required scope, principal, and request ID.
+
+Internal service-to-service gRPC can be protected with metadata auth:
+
+```text
+internal_rpc.auth.enabled=true
+internal_rpc.auth.token=<raw-internal-token>
+internal_rpc.auth.token_sha256=<sha256-of-raw-internal-token>
+```
+
+Gateway and PushService inject `x-nebula-internal-token` for their internal calls. Business services and GatewayService reject missing or invalid internal tokens when the switch is enabled.
 
 Admin cleanup is bounded by config:
 
@@ -82,6 +94,8 @@ grpc.tls.target_name_override=nebula.internal
 ```
 
 All C++ gRPC service listeners and internal Gateway/Push clients read these keys.
+
+Internal RPC token auth and gRPC TLS are complementary. For single-node production, keep internal RPC listeners on `127.0.0.1`; enable the token guard and use TLS/mTLS if ports leave loopback or cross hosts.
 
 ## Gateway Native TLS
 

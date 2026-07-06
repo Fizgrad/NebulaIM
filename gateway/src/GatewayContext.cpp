@@ -1,6 +1,7 @@
 #include "GatewayContext.h"
 
 #include "common/log/Logger.h"
+#include "common/rpc/InternalRpcAuth.h"
 #include "common/trace/TraceManager.h"
 
 namespace nebula {
@@ -10,6 +11,7 @@ GatewayContext::~GatewayContext() = default;
 
 bool GatewayContext::init(const std::string& config_path) {
     if (!config_.loadFromFile(config_path)) return false;
+    InternalRpcAuth::instance().configureFromConfig(config_);
     options_.gateway_id = config_.getString("gateway.id", options_.gateway_id);
     options_.tcp_host = config_.getString("gateway.tcp.host", options_.tcp_host);
     options_.tcp_port = config_.getInt("gateway.tcp.port", options_.tcp_port);
@@ -65,6 +67,7 @@ ConnectionManager* GatewayContext::connectionManager() { return connection_manag
 GatewayOnlineManager* GatewayContext::onlineManager() { return online_manager_.get(); }
 GatewayBackendClients* GatewayContext::backendClients() { return backend_clients_.get(); }
 GatewayRouter* GatewayContext::router() { return router_.get(); }
+RpcExecutor* GatewayContext::rpcExecutor() { return rpc_executor_.get(); }
 RedisClient* GatewayContext::redisClient() { return redis_client_.get(); }
 PacketCodec* GatewayContext::codec() { return codec_.get(); }
 std::string GatewayContext::tcpListenIp() const { return options_.tcp_host; }

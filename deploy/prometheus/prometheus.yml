@@ -17,3 +17,9 @@ scrape_configs:
   - job_name: nebula-push-service
     static_configs:
       - targets: ["push_service:9104", "host.docker.internal:9104"]
+  - job_name: nebula-conversation-service
+    static_configs:
+      - targets: ["conversation_service:9105", "host.docker.internal:9105"]
+  - job_name: nebula-admin-service
+    static_configs:
+      - targets: ["admin_service:9106", "host.docker.internal:9106"]

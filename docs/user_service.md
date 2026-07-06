@@ -21,7 +21,7 @@ load user by username -> verify password -> generate random token -> Redis SETEX
 ValidateToken:
 
 ```text
-token -> Redis GET nebula:token:{token} -> valid/user_id
+token -> SHA-256(token) -> Redis GET nebula:token:{token_hash} -> valid/user_id
 ```
 
 GetUserInfo:
@@ -39,7 +39,7 @@ username -> UserDao getUserByUsername -> public UserInfo
 Logout:
 
 ```text
-token -> Redis DEL nebula:token:{token} -> return CommonResponse
+token -> SHA-256(token) -> Redis DEL nebula:token:{token_hash} -> return CommonResponse
 ```
 
 RefreshToken:
@@ -56,12 +56,12 @@ Passwords are stored as:
 pbkdf2_sha256$iterations$salt_hex$hash_hex
 ```
 
-Each password uses a unique random salt. Login returns generic `auth failed` for both missing user and wrong password. Logs never print plaintext passwords or full tokens.
+Each password uses a unique random salt. Login returns generic `auth failed` for both missing user and wrong password. Logs never print plaintext passwords or full tokens. Redis token keys use `SHA-256(token)` rather than the raw bearer token, so a Redis key scan does not directly expose live tokens.
 
 ## Config
 
 ```text
-user_service.host=0.0.0.0
+user_service.host=127.0.0.1
 user_service.port=50051
 auth.token_ttl_seconds=604800
 auth.password_min_length=6
@@ -104,7 +104,7 @@ LoginRequest also accepts `device_id`, `platform`, and `device_name`; Gateway us
 8. Redis failure during login should fail the login because token persistence failed.
 9. ValidateToken can be optimized with short-lived local cache if Redis is hot.
 10. Multi-device login can store multiple random tokens per user/device.
-11. Logout deletes the token key.
+11. Logout deletes the hashed token key.
 12. Kickout deletes token and notifies gateway.
 13. JWT is self-contained but harder to revoke; random token is centrally revocable.
 14. UserDao centralizes SQL and escaping.

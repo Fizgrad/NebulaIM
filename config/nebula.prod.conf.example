@@ -86,6 +86,20 @@ rate_limit.connection_packet_per_second=50
 circuit_breaker.failure_threshold=5
 circuit_breaker.open_timeout_ms=30000
 
+metrics.enabled=true
+metrics.host=127.0.0.1
+metrics.gateway.port=9100
+metrics.user_service.port=9101
+metrics.message_service.port=9102
+metrics.relation_service.port=9103
+metrics.push_service.port=9104
+metrics.conversation_service.port=9105
+metrics.admin_service.port=9106
+
+internal_rpc.auth.enabled=true
+internal_rpc.auth.token=CHANGE_ME_INTERNAL_RPC_TOKEN
+internal_rpc.auth.token_sha256=CHANGE_ME_INTERNAL_RPC_TOKEN_SHA256
+
 # For a single host with loopback-only internal RPC, plaintext gRPC is acceptable
 # behind host firewall rules. Enable TLS/mTLS if RPC ports leave loopback.
 grpc.tls.enabled=false

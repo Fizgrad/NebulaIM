@@ -2,6 +2,7 @@
 
 #include "PushWorker.h"
 #include "common/log/Logger.h"
+#include "common/rpc/InternalRpcAuth.h"
 #include "common/trace/TraceManager.h"
 
 namespace nebula {
@@ -11,6 +12,7 @@ PushServiceContext::~PushServiceContext() { stopWorkers(); }
 
 bool PushServiceContext::init(const std::string& config_path) {
     if (!config_.loadFromFile(config_path)) return false;
+    InternalRpcAuth::instance().configureFromConfig(config_);
     TraceManager::instance().configure(TraceManager::configFrom(config_, "nebula-push-service"));
     MySqlConfig mysql;
     mysql.host = config_.getString("mysql.host", mysql.host);
@@ -34,13 +36,10 @@ bool PushServiceContext::init(const std::string& config_path) {
     producer_config.client_id = config_.getString("kafka.producer.client_id", "nebula-push-producer");
     if (!kafka_producer_->init(producer_config)) return false;
 
-    kafka_consumer_ = std::make_unique<KafkaConsumer>();
-    KafkaConsumerConfig consumer_config;
-    consumer_config.brokers = config_.getString("kafka.brokers", consumer_config.brokers);
-    consumer_config.group_id = config_.getString("kafka.consumer.group_id", "nebula-push-service");
-    consumer_config.client_id = config_.getString("kafka.consumer.client_id", "nebula-push-consumer");
-    consumer_config.enable_auto_commit = config_.getBool("kafka.consumer.enable_auto_commit", consumer_config.enable_auto_commit);
-    if (!kafka_consumer_->init(consumer_config)) return false;
+    kafka_consumer_config_.brokers = config_.getString("kafka.brokers", kafka_consumer_config_.brokers);
+    kafka_consumer_config_.group_id = config_.getString("kafka.consumer.group_id", "nebula-push-service");
+    kafka_consumer_config_.client_id = config_.getString("kafka.consumer.client_id", "nebula-push-consumer");
+    kafka_consumer_config_.enable_auto_commit = config_.getBool("kafka.consumer.enable_auto_commit", kafka_consumer_config_.enable_auto_commit);
 
     options_.worker_num = config_.getInt("push_service.worker_num", 1);
     options_.poll_timeout_ms = config_.getInt("push_service.poll_timeout_ms", 1000);
@@ -53,7 +52,6 @@ bool PushServiceContext::init(const std::string& config_path) {
     options_.topic_retry = config_.getString("kafka.topic.retry", options_.topic_retry);
     options_.topic_dlq = config_.getString("kafka.topic.dlq", options_.topic_dlq);
     grpc_tls_config_ = GrpcTlsCredentials::fromConfig(config_);
-    if (!kafka_consumer_->subscribe({options_.topic_single, options_.topic_group, options_.topic_retry})) return false;
 
     offline_message_dao_ = std::make_unique<OfflineMessageDao>(mysql_pool_);
     group_dao_ = std::make_unique<GroupDao>(mysql_pool_);
@@ -75,20 +73,42 @@ bool PushServiceContext::init(const std::string& config_path) {
 
 bool PushServiceContext::startWorkers() {
     if (!workers_.empty()) return true;
-    PushWorkerOptions worker_options;
-    worker_options.poll_timeout_ms = options_.poll_timeout_ms;
-    worker_options.topic_single = options_.topic_single;
-    worker_options.topic_group = options_.topic_group;
-    worker_options.topic_retry = options_.topic_retry;
-    auto worker = std::make_unique<PushWorker>(kafka_consumer_.get(), dispatcher_.get(), worker_options);
-    if (!worker->start()) return false;
-    workers_.push_back(std::move(worker));
+    int worker_count = options_.worker_num > 0 ? options_.worker_num : 1;
+    for (int i = 0; i < worker_count; ++i) {
+        auto consumer = std::make_unique<KafkaConsumer>();
+        KafkaConsumerConfig config = kafka_consumer_config_;
+        config.client_id = kafka_consumer_config_.client_id + "-" + std::to_string(i);
+        if (!consumer->init(config)) {
+            stopWorkers();
+            return false;
+        }
+        if (!consumer->subscribe({options_.topic_single, options_.topic_group, options_.topic_retry})) {
+            stopWorkers();
+            return false;
+        }
+        PushWorkerOptions worker_options;
+        worker_options.poll_timeout_ms = options_.poll_timeout_ms;
+        worker_options.topic_single = options_.topic_single;
+        worker_options.topic_group = options_.topic_group;
+        worker_options.topic_retry = options_.topic_retry;
+        auto worker = std::make_unique<PushWorker>(consumer.get(), dispatcher_.get(), worker_options);
+        if (!worker->start()) {
+            stopWorkers();
+            return false;
+        }
+        kafka_consumers_.push_back(std::move(consumer));
+        workers_.push_back(std::move(worker));
+    }
     return true;
 }
 
 void PushServiceContext::stopWorkers() {
     for (auto& worker : workers_) worker->stop();
     workers_.clear();
+    for (auto& consumer : kafka_consumers_) {
+        if (consumer) consumer->close();
+    }
+    kafka_consumers_.clear();
 }
 
 PushDispatcher* PushServiceContext::dispatcher() { return dispatcher_.get(); }

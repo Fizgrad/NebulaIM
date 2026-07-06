@@ -6,7 +6,7 @@ Check ports, service addresses, worker counts, heartbeat timeout, Redis TTLs, to
 
 Run `./scripts/validate_prod_config.sh /etc/nebulaim/nebula.conf` before starting systemd services on a production host.
 
-Define non-default scoped `admin_service.admin_tokens`. Review `gateway.*.addr` and `*.addr` service resolver entries before multi-instance deployment.
+Define non-default scoped `admin_service.admin_tokens`. Review `gateway.*.addr` and `*.addr` service resolver entries before multi-instance deployment. Enable `internal_rpc.auth.enabled=true` and set matching `internal_rpc.auth.token` / `internal_rpc.auth.token_sha256` for service-to-service metadata authentication.
 
 Use scoped admin tokens for operations: `health`, `stats`, `outbox`, `kafka`, `cleanup`, or `*`. Store only `name:sha256:<token_sha256_hex>:scopes` entries, and send raw tokens through gRPC metadata key `x-nebula-admin-token`.
 
@@ -26,7 +26,7 @@ Enable `scripts/backup_mysql.sh` via cron or a systemd timer and verify restore 
 
 ## Redis
 
-Verify auth, persistence policy, eviction policy, online TTL keys, token TTL keys, dedup TTL keys, and monitoring.
+Verify auth, persistence policy, eviction policy, online TTL keys, hashed token TTL keys, dedup TTL keys, and monitoring.
 
 ## Kafka
 
@@ -48,11 +48,11 @@ Check Prometheus scrape targets, Grafana dashboards, Jaeger UI, OTLP endpoint, s
 
 Ensure logs directory exists, rotation is configured, tokens are not fully logged, and trace IDs appear in request paths.
 
-Confirm gRPC clients propagate `x-nebula-trace-id` and Admin clients send `x-nebula-admin-token`.
+Confirm gRPC clients propagate `x-nebula-trace-id`, internal service clients send `x-nebula-internal-token` when enabled, and Admin clients send `x-nebula-admin-token`.
 
 ## Tests And Rollback
 
-Run build, ctest, selected integration tests, the opt-in full backend E2E, and benchmark. Keep migration rollback SQL or restore plan ready before production schema changes.
+Run build, `ctest -L unit`, selected `ctest -L integration` tests, the opt-in full backend E2E, and benchmark. Keep migration rollback SQL or restore plan ready before production schema changes.
 
 For single-node production, also run `./scripts/health_check.sh /etc/nebulaim/nebula.conf` after every deploy.
 

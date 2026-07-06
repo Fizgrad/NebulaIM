@@ -2,6 +2,7 @@
 #include "AdminServiceImpl.h"
 
 #include "common/log/Logger.h"
+#include "common/monitor/MetricsRuntime.h"
 #include "common/rpc/GrpcTlsCredentials.h"
 
 #if defined(NEBULA_ENABLE_GRPC)
@@ -57,6 +58,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     LOG_INFO("AdminService listening on " + context.listenAddress());
+    auto metrics_server = nebula::startMetricsServerFromConfig(config_path, "admin_service", 9106);
     server->Wait();
     return 0;
 #else

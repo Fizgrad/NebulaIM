@@ -49,7 +49,7 @@ Kafka decouples message send, fanout, offline handling, retry, and DLQ processin
 ## Redis keys
 
 ```text
-nebula:token:{token} -> user_id, TTL token lifetime
+nebula:token:{sha256(token)} -> user_id, TTL token lifetime
 nebula:user:devices:{user_id} -> set(device_id), TTL heartbeat window
 nebula:user:online:{user_id}:{device_id} -> gateway_id, TTL heartbeat window
 nebula:user:conn:{user_id}:{device_id} -> connection_id, TTL heartbeat window

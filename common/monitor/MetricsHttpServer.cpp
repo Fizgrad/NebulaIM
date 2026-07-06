@@ -63,6 +63,10 @@ void MetricsHttpServer::run() {
 }
 
 void MetricsHttpServer::handleClient(int client_fd) {
+    timeval timeout{};
+    timeout.tv_sec = 2;
+    setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
     char buffer[1024];
     ::read(client_fd, buffer, sizeof(buffer));
     std::string body = MetricsRegistry::instance().renderPrometheus();

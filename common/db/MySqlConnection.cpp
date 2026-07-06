@@ -4,6 +4,7 @@
 #include "common/log/Logger.h"
 
 #include <mysql/mysql.h>
+#include <mysql/errmsg.h>
 
 namespace nebula {
 
@@ -58,6 +59,21 @@ bool MySqlConnection::reconnect() {
     return connect(config_);
 }
 
+bool MySqlConnection::ping() {
+    if (!connected_ || mysql_ == nullptr) {
+        last_error_ = "MySQL connection is not connected";
+        return false;
+    }
+    if (mysql_ping(static_cast<MYSQL*>(mysql_)) == 0) {
+        return true;
+    }
+    last_error_ = mysql_error(static_cast<MYSQL*>(mysql_));
+    unsigned int error_code = mysql_errno(static_cast<MYSQL*>(mysql_));
+    LOG_ERROR("MySQL ping failed: " + last_error_);
+    markDisconnectedIfNeeded(error_code);
+    return false;
+}
+
 bool MySqlConnection::executeUpdate(const std::string& sql) {
     if (!connected_) {
         last_error_ = "MySQL connection is not connected";
@@ -65,7 +81,9 @@ bool MySqlConnection::executeUpdate(const std::string& sql) {
     }
     if (mysql_query(static_cast<MYSQL*>(mysql_), sql.c_str()) != 0) {
         last_error_ = mysql_error(static_cast<MYSQL*>(mysql_));
+        unsigned int error_code = mysql_errno(static_cast<MYSQL*>(mysql_));
         LOG_ERROR("MySQL update failed: " + last_error_ + " sql=" + sql);
+        markDisconnectedIfNeeded(error_code);
         return false;
     }
     do {
@@ -84,13 +102,17 @@ std::unique_ptr<MySqlResult> MySqlConnection::executeQuery(const std::string& sq
     }
     if (mysql_query(static_cast<MYSQL*>(mysql_), sql.c_str()) != 0) {
         last_error_ = mysql_error(static_cast<MYSQL*>(mysql_));
+        unsigned int error_code = mysql_errno(static_cast<MYSQL*>(mysql_));
         LOG_ERROR("MySQL query failed: " + last_error_ + " sql=" + sql);
+        markDisconnectedIfNeeded(error_code);
         return nullptr;
     }
     MYSQL_RES* result = mysql_store_result(static_cast<MYSQL*>(mysql_));
     if (result == nullptr && mysql_field_count(static_cast<MYSQL*>(mysql_)) != 0) {
         last_error_ = mysql_error(static_cast<MYSQL*>(mysql_));
+        unsigned int error_code = mysql_errno(static_cast<MYSQL*>(mysql_));
         LOG_ERROR("MySQL store result failed: " + last_error_);
+        markDisconnectedIfNeeded(error_code);
         return nullptr;
     }
     return std::make_unique<MySqlResult>(result);
@@ -140,6 +162,13 @@ bool MySqlConnection::isConnected() const {
 
 std::string MySqlConnection::lastError() const {
     return last_error_;
+}
+
+void MySqlConnection::markDisconnectedIfNeeded(unsigned int error_code) {
+    if (error_code != CR_SERVER_GONE_ERROR && error_code != CR_SERVER_LOST) {
+        return;
+    }
+    close();
 }
 
 }  // namespace nebula

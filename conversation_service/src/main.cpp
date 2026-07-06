@@ -2,6 +2,7 @@
 #include "ConversationServiceImpl.h"
 
 #include "common/log/Logger.h"
+#include "common/monitor/MetricsRuntime.h"
 #include "common/rpc/GrpcTlsCredentials.h"
 
 #if defined(NEBULA_ENABLE_GRPC)
@@ -47,6 +48,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     LOG_INFO("ConversationService listening on " + context.listenAddress());
+    auto metrics_server = nebula::startMetricsServerFromConfig(config_path, "conversation_service", 9105);
     server->Wait();
     return 0;
 #else

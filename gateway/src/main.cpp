@@ -3,6 +3,8 @@
 #include "GatewayServiceImpl.h"
 
 #include "common/log/Logger.h"
+#include "common/monitor/MetricsRegistry.h"
+#include "common/monitor/MetricsRuntime.h"
 #include "common/net/EventLoop.h"
 #include "common/net/InetAddress.h"
 #include "common/rpc/GrpcTlsCredentials.h"
@@ -30,8 +32,9 @@ std::string parseConfigPath(int argc, char** argv) {
 
 int main(int argc, char* argv[]) {
 #if defined(NEBULA_ENABLE_GRPC) && defined(NEBULA_ENABLE_STORAGE) && defined(__linux__)
+    std::string config_path = parseConfigPath(argc, argv);
     nebula::GatewayContext context;
-    if (!context.init(parseConfigPath(argc, argv))) {
+    if (!context.init(config_path)) {
         LOG_ERROR("failed to init GatewayContext");
         return 1;
     }
@@ -40,6 +43,13 @@ int main(int argc, char* argv[]) {
     nebula::InetAddress listen_addr(static_cast<uint16_t>(options.tcp_port), options.tcp_host);
     nebula::GatewayServer tcp_server(&loop, listen_addr, options.gateway_id, context.connectionManager(), context.onlineManager(), context.router(), options.tcp_worker_threads, options.heartbeat_timeout_ms, context.tcpTlsContext());
     tcp_server.start();
+    loop.runEvery(5000, [&context]() {
+        auto* executor = context.rpcExecutor();
+        if (executor == nullptr) return;
+        nebula::MetricsRegistry::instance().gauge("nebula_gateway_rpc_queue_size", "Gateway pending RPC tasks").set(static_cast<double>(executor->queueSize()));
+        nebula::MetricsRegistry::instance().gauge("nebula_gateway_rpc_task_total", "Gateway submitted RPC tasks").set(static_cast<double>(executor->submittedTasks()));
+        nebula::MetricsRegistry::instance().gauge("nebula_gateway_rpc_task_failed_total", "Gateway failed RPC tasks").set(static_cast<double>(executor->failedTasks()));
+    });
 
     nebula::GatewayServiceImpl rpc_service(context.connectionManager(), context.codec(), options.gateway_id);
     auto credentials = nebula::GrpcTlsCredentials::serverCredentials(context.grpcTlsConfig());
@@ -56,6 +66,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     std::thread rpc_thread([&]() { rpc_server->Wait(); });
+    auto metrics_server = nebula::startMetricsServerFromConfig(config_path, "gateway", 9100);
     LOG_INFO(std::string("Gateway TCP listening on ") + options.tcp_host + ":" + std::to_string(options.tcp_port) +
              (options.tcp_tls.enabled ? " with native TLS" : " without native TLS"));
     LOG_INFO("Gateway RPC listening on " + context.rpcListenAddress());
