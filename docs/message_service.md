@@ -10,6 +10,8 @@ SendSingleMessage validates users and content, checks Redis dedup by `from_user_
 
 SendGroupMessage validates sender, group existence, membership, content, writes `messages`, updates group member conversations, inserts an `outbox_events` row, and commits. Group fanout is deferred to PushService.
 
+Send requests keep the client-provided `content_type`. Text uses `MESSAGE_CONTENT_TYPE_TEXT`; image messages use `MESSAGE_CONTENT_TYPE_IMAGE` with content set to the image URL produced by the web bridge upload API. The persisted row and the Kafka `MessageData` payload carry the same content type so live push, offline pull, and history reads render consistently.
+
 AckMessage is idempotent: it updates delivered state and marks offline message delivered if present.
 
 PullOfflineMessages reads undelivered offline messages by user, parses Protobuf MessageData payload, returns a limited page, and marks returned messages delivered.

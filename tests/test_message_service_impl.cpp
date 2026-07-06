@@ -10,6 +10,7 @@
 #include "common/utils/TimeUtil.h"
 
 #include <cassert>
+#include <cstdlib>
 #include <grpcpp/grpcpp.h>
 
 namespace {
@@ -28,8 +29,9 @@ uint64_t createUser(nebula::UserDao* dao, const std::string& prefix) {
 }
 
 int main() {
+    const char* config_path = std::getenv("NEBULA_CONFIG");
     nebula::MessageServiceContext context;
-    assert(context.init("config/nebula.conf"));
+    assert(context.init(config_path != nullptr ? config_path : "config/nebula.conf"));
     nebula::MessageServiceImpl service(context.userDao(), context.groupDao(), context.messageDao(), context.offlineMessageDao(), context.redisClient(), context.kafkaProducer(), context.messageIdGenerator(), context.messageDeduplicator(), context.options());
     grpc::ServerContext server_context;
 
@@ -51,11 +53,24 @@ int main() {
     auto stored = context.messageDao()->getMessageById(single_resp.message_id());
     assert(stored.has_value());
     assert(stored->content == "hello single");
+    assert(stored->message_type == static_cast<int>(nebula::proto::MESSAGE_CONTENT_TYPE_TEXT));
 
     nebula::proto::SendSingleMessageResponse single_dup;
     assert(service.SendSingleMessage(&server_context, &single, &single_dup).ok());
     assert(single_dup.response().code() == 0);
     assert(single_dup.message_id() == single_resp.message_id());
+
+    nebula::proto::SendSingleMessageRequest image_single = single;
+    image_single.set_request_id("single-image");
+    image_single.set_content_type(nebula::proto::MESSAGE_CONTENT_TYPE_IMAGE);
+    image_single.set_content("https://example.com/uploads/images/demo.png");
+    image_single.set_client_sequence_id(102);
+    nebula::proto::SendSingleMessageResponse image_resp;
+    assert(service.SendSingleMessage(&server_context, &image_single, &image_resp).ok());
+    assert(image_resp.response().code() == 0);
+    auto image_stored = context.messageDao()->getMessageById(image_resp.message_id());
+    assert(image_stored.has_value());
+    assert(image_stored->message_type == static_cast<int>(nebula::proto::MESSAGE_CONTENT_TYPE_IMAGE));
 
     int64_t now = nebula::TimeUtil::nowMs();
     nebula::Group group;

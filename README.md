@@ -40,7 +40,7 @@ AdminService
 - Password hashing and Redis token storage with hashed token keys.
 - Username lookup for frontend friend requests.
 - RelationService friend requests, friends, groups, group search and group membership.
-- MessageService direct/group send, message IDs, deduplication, persistence, conversations, recall and outbox publication.
+- MessageService direct/group text and image messages, message IDs, deduplication, persistence, conversations, recall and outbox publication.
 - ConversationService list/history/read marker support.
 - PushService Kafka manual commit after successful handling, retry and DLQ paths.
 - Multi-device online state keyed by user, device and Gateway connection.
@@ -229,7 +229,7 @@ AdminService
 - 密码哈希存储，Redis token key 使用 token 哈希。
 - 支持按 username 查询用户，用于前端添加好友。
 - RelationService 支持好友请求、好友、群组、群搜索和群成员。
-- MessageService 支持单聊/群聊发送、消息 ID、去重、持久化、会话更新、撤回和 outbox 发布。
+- MessageService 支持单聊/群聊文本和图片消息、消息 ID、去重、持久化、会话更新、撤回和 outbox 发布。
 - ConversationService 支持会话列表、历史消息和已读标记。
 - PushService 在处理成功后手动提交 Kafka offset，并支持重试和 DLQ 路径。
 - 多设备在线状态按 user、device 和 Gateway connection 记录。

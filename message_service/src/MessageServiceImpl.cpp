@@ -49,7 +49,7 @@ proto::MessageData toMessageData(const MessageRecord& record) {
     data.set_from_user_id(record.from_user_id);
     data.set_to_user_id(record.to_user_id);
     data.set_group_id(record.group_id);
-    data.set_content_type(proto::MESSAGE_CONTENT_TYPE_TEXT);
+    data.set_content_type(static_cast<proto::MessageContentType>(record.message_type));
     data.set_content(record.content);
     data.set_status(static_cast<proto::MessageStatus>(record.status));
     data.set_timestamp(record.created_at);
