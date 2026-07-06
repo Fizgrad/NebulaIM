@@ -1,5 +1,7 @@
 # NebulaIM
 
+**Language / 语言:** [English](#english) | [中文](#中文)
+
 ## English
 
 NebulaIM is a C++17 distributed instant messaging backend. It includes a custom epoll/Reactor TCP and WebSocket Gateway, a binary Packet + Protobuf protocol, gRPC microservices, MySQL persistence, Redis online/token state, Kafka push delivery, Prometheus/Grafana metrics, tracing hooks and production deployment scripts.
@@ -29,7 +31,7 @@ AdminService
   -> health / online stats / outbox stats / Kafka lag / cleanup / audit / config validation
 ```
 
-### Current Capabilities
+### Features
 
 - C++17 epoll + Reactor networking.
 - TCP and WebSocket Gateway with the same binary Packet protocol.
@@ -185,7 +187,7 @@ Topic documents under `docs/` describe the current backend internals:
 - `docs/troubleshooting.md`
 - `web_sdk/README.md`
 
-### Current Limits
+### Limits
 
 NebulaIM does not yet include a distributed service discovery cluster backend, Kubernetes Operator, identity-provider-backed admin console, end-to-end encryption, multi-region deployment, or a full OpenTelemetry SDK integration beyond the current trace hooks.
 
@@ -218,7 +220,7 @@ AdminService
   -> 健康检查 / 在线统计 / outbox 统计 / Kafka 滞后 / 清理 / 审计 / 配置校验
 ```
 
-### 当前能力
+### 功能
 
 - C++17 epoll + Reactor 网络库。
 - TCP 和 WebSocket Gateway 复用同一套二进制 Packet 协议。
@@ -374,6 +376,6 @@ systemd、Nginx TLS 终止、备份、恢复和健康检查见 `docs/single_node
 - `docs/troubleshooting.md`
 - `web_sdk/README.md`
 
-### 当前限制
+### 限制
 
 NebulaIM 尚未包含分布式服务发现集群后端、Kubernetes Operator、接入身份提供商的管理控制台、端到端加密、多区域部署，以及完整 OpenTelemetry SDK 集成；当前实现只包含轻量 trace hook。
