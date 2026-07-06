@@ -1,45 +1,55 @@
-<p align="center">
-  <img src="docs/assets/logo.png" alt="NebulaIM Logo" width="180">
-</p>
-
 # NebulaIM
 
-NebulaIM is a C++17 high-performance distributed instant messaging system featuring a custom epoll/Reactor TCP/WebSocket gateway, binary packet protocol, gRPC microservices, MySQL, Redis, Kafka, Prometheus/Grafana, and benchmark tooling.
+## English
 
-## Architecture
+NebulaIM is a C++17 distributed instant messaging backend. It includes a custom epoll/Reactor TCP and WebSocket Gateway, a binary Packet + Protobuf protocol, gRPC microservices, MySQL persistence, Redis online/token state, Kafka push delivery, Prometheus/Grafana metrics, tracing hooks and production deployment scripts.
+
+### Architecture
 
 ```text
 Native Client
-  | TCP + PacketCodec
-  v
-Gateway -- bounded gRPC/RpcExecutor --> UserService / RelationService / MessageService
-  ^
-  | WebSocket binary frame + PacketCodec
+  -> TCP PacketCodec
+  -> Gateway
+  -> bounded gRPC RpcExecutor
+UserService / RelationService / MessageService / ConversationService / PushService
+
 Browser
+  -> Web Bridge /ws
+  -> Gateway binary PacketCodec
 
-MessageService --> MySQL(messages + conversations + outbox_events)
-                         |
-                         v
-                    OutboxWorker --> Kafka --> PushService -- GatewayService.DeliverToConnection --> Gateway
+MessageService
+  -> MySQL messages + conversations + outbox_events
+  -> OutboxWorker
+  -> Kafka
+  -> PushService
+  -> GatewayService.DeliverToConnection
+  -> Gateway
 
-UserService / RelationService / ConversationService --> MySQL / Redis
-AdminService --> health / cleanup / online stats / outbox stats / Kafka lag / config validation / audit
+AdminService
+  -> health / online stats / outbox stats / Kafka lag / cleanup / audit / config validation
 ```
 
-## Highlights
+### Current Capabilities
 
-1. C++17 epoll + Reactor TCP network library.
-2. Custom binary protocol with magic/version/body_length/sequence_id.
-3. Gateway long-connection access and backend gRPC routing.
-4. UserService with MySQL + Redis token auth.
-5. MessageService with message_id, dedup, MySQL persistence, conversation update, and Outbox Pattern.
-6. PushService with Kafka manual commit after successful handling, multi-consumer worker support, Redis multi-device online status, Gateway RPC, offline messages, retry, DLQ.
-7. MySQL persistence for users, relations, groups, messages, offline messages.
-8. Redis for token, online state, dedup, retry.
-9. Prometheus/Grafana monitoring assets.
-10. WebSocket Gateway, optional native Gateway TLS, bounded async Gateway backend RPC executor, rate limiter, circuit breaker primitives, trace ID + OTLP/Jaeger tracing, migration scripts, health/readiness scripts, Web SDK, and benchmark tools.
+- C++17 epoll + Reactor networking.
+- TCP and WebSocket Gateway with the same binary Packet protocol.
+- Bounded asynchronous Gateway backend RPC executor.
+- User registration, login, token validation, refresh and logout.
+- Password hashing and Redis token storage with hashed token keys.
+- Username lookup for frontend friend requests.
+- RelationService friend requests, friends, groups, group search and group membership.
+- MessageService direct/group send, message IDs, deduplication, persistence, conversations, recall and outbox publication.
+- ConversationService list/history/read marker support.
+- PushService Kafka manual commit after successful handling, retry and DLQ paths.
+- Multi-device online state keyed by user, device and Gateway connection.
+- Optional internal gRPC metadata auth with `x-nebula-internal-token`.
+- Scoped AdminService tokens with `x-nebula-admin-token`.
+- Optional gRPC TLS/mTLS and optional native Gateway TLS.
+- Prometheus metrics endpoints for Gateway and all services.
+- OpenTelemetry OTLP/HTTP trace export hooks.
+- MySQL migration, backup, restore, health check and single-node systemd install scripts.
 
-## Quick Start
+### Quick Start
 
 ```bash
 ./scripts/build.sh
@@ -49,61 +59,60 @@ AdminService --> health / cleanup / online stats / outbox stats / Kafka lag / co
 ./scripts/start_services.sh
 ```
 
-Single-node production deployment:
-
-```bash
-cmake -S . -B build
-cmake --build build -j
-./scripts/render_admin_token_hash.sh 'replace-with-long-random-token'
-./scripts/validate_prod_config.sh /etc/nebulaim/nebula.conf
-sudo ./scripts/install_single_node.sh
-```
-
-See `docs/single_node_production.md` for systemd, Nginx TLS termination, backups, and health checks.
-
-Run a client:
+Run a demo client:
 
 ```bash
 ./build/examples/gateway_client_demo --host 127.0.0.1 --port 9000
 ./build/examples/gateway_websocket_client_demo --url ws://127.0.0.1:9000/
 ```
 
-Run the real backend E2E scenario after services are running:
-
-```bash
-NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e
-```
-
-Stop:
+Stop services:
 
 ```bash
 ./scripts/stop_services.sh
 ./scripts/stop_deps.sh
 ```
 
-## Dependencies
+### Build
 
-Ubuntu/Debian:
+Ubuntu/Debian dependencies:
 
 ```bash
 sudo apt update
 sudo apt install -y build-essential cmake pkg-config libssl-dev protobuf-compiler libprotobuf-dev protobuf-compiler-grpc libgrpc++-dev default-libmysqlclient-dev libhiredis-dev librdkafka-dev
 ```
 
-## Build
+Manual build:
 
 ```bash
-mkdir -p build
-cd build
-cmake ..
-cmake --build . -j
+cmake -S . -B build
+cmake --build build -j
 ```
 
-## Services and Ports
+### Tests
+
+```bash
+./scripts/run_tests.sh --unit-only
+ctest --test-dir build -L unit --output-on-failure
+```
+
+Integration tests require MySQL, Redis and Kafka:
+
+```bash
+ctest --test-dir build -L integration --output-on-failure
+```
+
+Full backend E2E is opt-in:
+
+```bash
+NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e
+```
+
+### Service Ports
 
 | Service | Port |
 |---|---:|
-| Gateway TCP | 9000 |
+| Gateway TCP/WebSocket | 9000 |
 | Gateway RPC | 50055 |
 | UserService | 50051 |
 | MessageService | 50052 |
@@ -119,12 +128,7 @@ cmake --build . -j
 | Redis | 6379 |
 | Kafka | 9092 |
 
-## Monitoring
-
-Prometheus: http://localhost:9090
-Grafana: http://localhost:3000, default admin password configured in `deploy/docker-compose.yml`.
-
-Metrics endpoints:
+Metrics exporters:
 
 ```text
 Gateway 9100
@@ -136,91 +140,240 @@ ConversationService 9105
 AdminService 9106
 ```
 
-## Backend Feature Matrix
+### Production Notes
 
-| Feature | Status |
-|---|---|
-| TCP Gateway | Implemented |
-| WebSocket Gateway | Implemented, same port auto-detect |
-| Gateway async backend RPC | Implemented with bounded RpcExecutor thread pool |
-| Outbox Pattern | Implemented for message send and recall publication paths |
-| Kafka consumer safety | PushService disables auto commit and commits offsets after successful handling |
-| Kafka producer safety | KafkaProducer waits for delivery callback acknowledgement |
-| Friend requests | Implemented in RelationService proto/DAO/service; direct AddFriend is rejected in production path |
-| Conversation list | Implemented with ConversationDao and ConversationService |
-| Delivered/read semantics | ACK marks delivered; read RPCs mark read |
-| Message recall | Implemented with sender check and recall window |
-| Multi-device login | Gateway context, local index, and Redis online keys are device-scoped only |
-| Logout/RefreshToken | Implemented in UserService |
-| Rate limiting | TokenBucket/RateLimiter primitives and Gateway wrapper |
-| Circuit breaker | Gateway and Push gateway-client paths use circuit breaker primitives |
-| Service discovery | Static resolver abstraction for Gateway/Push clients |
-| Admin security | Scoped SHA-256 admin tokens, metadata auth, audit logs, HealthCheck, real online stats, outbox stats, and Kafka lag |
-| Internal RPC security | Optional `x-nebula-internal-token` metadata auth across Gateway/User/Relation/Conversation/Message/Push RPC surfaces |
-| gRPC TLS/mTLS | Config-driven server/client credentials; disabled by default for local dev |
-| Gateway native TLS | Optional TLS for the TCP/WebSocket Gateway listener through `gateway.tls.*`; edge TLS via Nginx remains supported |
-| Tracing | TraceId/TraceContext, span wrapper, lightweight OTLP/HTTP exporter, Jaeger Compose service; trace IDs are not Prometheus labels |
-| Database migration | `deploy/mysql/migration/V*.sql` plus locked/backup-aware `scripts/migrate_db.sh` |
-| Production readiness | `health_check.sh`, `wait_ready.sh`, systemd ExecStartPre checks, and Nginx WebSocket hardening |
-| Browser SDK | `web_sdk/nebulaim.js` wraps WebSocket binary Packet + protobuf calls |
+Use `config/nebula.prod.conf.example` as a template and replace every `CHANGE_ME` value. Do not commit raw tokens, passwords, private keys or host-specific production config.
 
-## Benchmark
+Important production settings:
 
-```bash
-./build/benchmark/bench_tcp_connections --host 127.0.0.1 --port 9000 --connections 10000 --rate 1000 --duration 60
-./build/benchmark/bench_gateway_login --host 127.0.0.1 --port 9000 --clients 100 --requests 10000
-./build/benchmark/bench_single_message --host 127.0.0.1 --port 9000 --clients 100 --requests 10000
-./build/benchmark/bench_group_message --host 127.0.0.1 --port 9000 --clients 100 --groups 10 --members 100 --requests 10000
-./build/benchmark/bench_push_e2e --host 127.0.0.1 --port 9000 --pairs 100 --requests 10000
+```text
+admin_service.admin_tokens=name:sha256:<token_sha256_hex>:scope1,scope2
+internal_rpc.auth.enabled=true
+internal_rpc.auth.token=<raw-internal-token>
+internal_rpc.auth.token_sha256=<sha256-of-raw-internal-token>
+mysql.password=<secret>
+redis.password=<secret>
 ```
 
-## Tests
+Validate production config before installing services:
+
+```bash
+./scripts/validate_prod_config.sh /etc/nebulaim/nebula.conf
+sudo ./scripts/install_single_node.sh
+```
+
+See `docs/single_node_production.md` for systemd, Nginx TLS termination, backups, restore and health checks.
+
+### Documentation
+
+Topic documents under `docs/` describe the current backend internals:
+
+- `docs/architecture.md`
+- `docs/deployment.md`
+- `docs/security_design.md`
+- `docs/reliability_design.md`
+- `docs/rpc.md`
+- `docs/storage.md`
+- `docs/user_service.md`
+- `docs/message_service.md`
+- `docs/relation_service.md`
+- `docs/push_service.md`
+- `docs/gateway.md`
+- `docs/admin_operations.md`
+- `docs/production_checklist.md`
+- `docs/single_node_production.md`
+- `docs/troubleshooting.md`
+- `web_sdk/README.md`
+
+### Current Limits
+
+NebulaIM does not yet include a distributed service discovery cluster backend, Kubernetes Operator, identity-provider-backed admin console, end-to-end encryption, multi-region deployment, or a full OpenTelemetry SDK integration beyond the current trace hooks.
+
+## 中文
+
+NebulaIM 是一个 C++17 分布式即时通信后端。它包含自研 epoll/Reactor TCP 与 WebSocket Gateway、二进制 Packet + Protobuf 协议、gRPC 微服务、MySQL 持久化、Redis 在线状态和 token 状态、Kafka 推送投递、Prometheus/Grafana 指标、追踪钩子以及生产部署脚本。
+
+### 架构
+
+```text
+原生客户端
+  -> TCP PacketCodec
+  -> Gateway
+  -> 有界 gRPC RpcExecutor
+UserService / RelationService / MessageService / ConversationService / PushService
+
+浏览器
+  -> Web Bridge /ws
+  -> Gateway 二进制 PacketCodec
+
+MessageService
+  -> MySQL messages + conversations + outbox_events
+  -> OutboxWorker
+  -> Kafka
+  -> PushService
+  -> GatewayService.DeliverToConnection
+  -> Gateway
+
+AdminService
+  -> 健康检查 / 在线统计 / outbox 统计 / Kafka 滞后 / 清理 / 审计 / 配置校验
+```
+
+### 当前能力
+
+- C++17 epoll + Reactor 网络库。
+- TCP 和 WebSocket Gateway 复用同一套二进制 Packet 协议。
+- Gateway 后端 RPC 使用有界异步执行器。
+- 用户注册、登录、token 校验、刷新和登出。
+- 密码哈希存储，Redis token key 使用 token 哈希。
+- 支持按 username 查询用户，用于前端添加好友。
+- RelationService 支持好友请求、好友、群组、群搜索和群成员。
+- MessageService 支持单聊/群聊发送、消息 ID、去重、持久化、会话更新、撤回和 outbox 发布。
+- ConversationService 支持会话列表、历史消息和已读标记。
+- PushService 在处理成功后手动提交 Kafka offset，并支持重试和 DLQ 路径。
+- 多设备在线状态按 user、device 和 Gateway connection 记录。
+- 可选内部 gRPC metadata 鉴权，使用 `x-nebula-internal-token`。
+- AdminService 使用 scoped token，metadata key 为 `x-nebula-admin-token`。
+- 可选 gRPC TLS/mTLS 和 Gateway 原生 TLS。
+- Gateway 和所有服务都有 Prometheus metrics endpoint。
+- 支持 OpenTelemetry OTLP/HTTP trace export 钩子。
+- 提供 MySQL migration、backup、restore、health check 和单节点 systemd 安装脚本。
+
+### 快速启动
+
+```bash
+./scripts/build.sh
+./scripts/start_deps.sh
+./scripts/migrate_db.sh
+./scripts/init_topics.sh
+./scripts/start_services.sh
+```
+
+运行示例客户端：
+
+```bash
+./build/examples/gateway_client_demo --host 127.0.0.1 --port 9000
+./build/examples/gateway_websocket_client_demo --url ws://127.0.0.1:9000/
+```
+
+停止服务：
+
+```bash
+./scripts/stop_services.sh
+./scripts/stop_deps.sh
+```
+
+### 构建
+
+Ubuntu/Debian 依赖：
+
+```bash
+sudo apt update
+sudo apt install -y build-essential cmake pkg-config libssl-dev protobuf-compiler libprotobuf-dev protobuf-compiler-grpc libgrpc++-dev default-libmysqlclient-dev libhiredis-dev librdkafka-dev
+```
+
+手动构建：
+
+```bash
+cmake -S . -B build
+cmake --build build -j
+```
+
+### 测试
 
 ```bash
 ./scripts/run_tests.sh --unit-only
 ctest --test-dir build -L unit --output-on-failure
 ```
 
-For integration tests, start dependencies first, then run:
+集成测试需要先启动 MySQL、Redis 和 Kafka：
 
 ```bash
 ctest --test-dir build -L integration --output-on-failure
 ```
 
-Full backend E2E is opt-in so normal `ctest` remains usable without running services:
+完整后端 E2E 默认不随普通测试自动运行：
 
 ```bash
 NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e
 ```
 
-## Documentation
+### 服务端口
 
-- `docs/backend_completion.md`
-- `docs/websocket_gateway.md`
-- `docs/outbox_pattern.md`
-- `docs/conversation_design.md`
-- `docs/reliability_design.md`
-- `docs/security_design.md`
-- `docs/production_checklist.md`
-- `docs/tracing.md`
-- `docs/admin_operations.md`
-- `docs/single_node_production.md`
-- `docs/final_architecture.md`
+| 服务 | 端口 |
+|---|---:|
+| Gateway TCP/WebSocket | 9000 |
+| Gateway RPC | 50055 |
+| UserService | 50051 |
+| MessageService | 50052 |
+| RelationService | 50053 |
+| PushService | 50054 |
+| ConversationService | 50056 |
+| AdminService | 50057 |
+| Prometheus | 9090 |
+| Grafana | 3000 |
+| Jaeger UI | 16686 |
+| OTLP HTTP | 4318 |
+| MySQL | 3306 |
+| Redis | 6379 |
+| Kafka | 9092 |
+
+指标端点：
+
+```text
+Gateway 9100
+UserService 9101
+MessageService 9102
+RelationService 9103
+PushService 9104
+ConversationService 9105
+AdminService 9106
+```
+
+### 生产配置
+
+使用 `config/nebula.prod.conf.example` 作为模板，并替换所有 `CHANGE_ME` 值。不要提交明文 token、密码、私钥或机器专属生产配置。
+
+关键生产设置：
+
+```text
+admin_service.admin_tokens=name:sha256:<token_sha256_hex>:scope1,scope2
+internal_rpc.auth.enabled=true
+internal_rpc.auth.token=<raw-internal-token>
+internal_rpc.auth.token_sha256=<sha256-of-raw-internal-token>
+mysql.password=<secret>
+redis.password=<secret>
+```
+
+安装服务前校验生产配置：
+
+```bash
+./scripts/validate_prod_config.sh /etc/nebulaim/nebula.conf
+sudo ./scripts/install_single_node.sh
+```
+
+systemd、Nginx TLS 终止、备份、恢复和健康检查见 `docs/single_node_production.md`。
+
+### 文档
+
+`docs/` 下的专题文档描述当前后端内部实现：
+
+- `docs/architecture.md`
 - `docs/deployment.md`
+- `docs/security_design.md`
+- `docs/reliability_design.md`
+- `docs/rpc.md`
 - `docs/storage.md`
-- `docs/gateway.md`
+- `docs/user_service.md`
 - `docs/message_service.md`
+- `docs/relation_service.md`
 - `docs/push_service.md`
-- `docs/benchmark.md`
-- `docs/interview.md`
+- `docs/gateway.md`
+- `docs/admin_operations.md`
+- `docs/production_checklist.md`
+- `docs/single_node_production.md`
 - `docs/troubleshooting.md`
-- `docs/roadmap.md`
 - `web_sdk/README.md`
 
-## Current Limits
+### 当前限制
 
-Still not implemented: real distributed service discovery cluster backend, Kubernetes Operator, full OpenTelemetry SDK features such as baggage/context propagation beyond trace IDs, identity-provider backed admin console, end-to-end encryption, multi-region deployment, and native gRPC completion-queue clients. For internet-facing TCP/WebSocket traffic, either terminate TLS at Nginx/Envoy or enable native Gateway TLS with `gateway.tls.enabled=true`.
-
-## License
-
-No standalone license file is currently included in this repository.
+NebulaIM 尚未包含分布式服务发现集群后端、Kubernetes Operator、接入身份提供商的管理控制台、端到端加密、多区域部署，以及完整 OpenTelemetry SDK 集成；当前实现只包含轻量 trace hook。
