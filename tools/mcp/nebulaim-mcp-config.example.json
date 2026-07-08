@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "nebulaim": {
+      "command": "node",
+      "args": [
+        "/path/to/NebulaIM/tools/mcp/nebulaim-mcp-server.mjs"
+      ]
+    }
+  }
+}

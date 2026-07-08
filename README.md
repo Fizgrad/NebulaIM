@@ -182,10 +182,18 @@ Topic documents under `docs/` describe the current backend internals:
 - `docs/push_service.md`
 - `docs/gateway.md`
 - `docs/admin_operations.md`
+- `docs/agent_rules_skills_mcp.md`
 - `docs/production_checklist.md`
 - `docs/single_node_production.md`
 - `docs/troubleshooting.md`
 - `web_sdk/README.md`
+
+Agent learning examples:
+
+- `AGENTS.md` project rules for AI agents.
+- `skills/nebulaim-backend/` repository-local skill example.
+- `tools/mcp/nebulaim-mcp-server.mjs` minimal stdio MCP server.
+- `tools/mcp/smoke-test.mjs` MCP protocol smoke test.
 
 ### Limits
 
@@ -371,10 +379,18 @@ systemd、Nginx TLS 终止、备份、恢复和健康检查见 `docs/single_node
 - `docs/push_service.md`
 - `docs/gateway.md`
 - `docs/admin_operations.md`
+- `docs/agent_rules_skills_mcp.md`
 - `docs/production_checklist.md`
 - `docs/single_node_production.md`
 - `docs/troubleshooting.md`
 - `web_sdk/README.md`
+
+Agent 学习示例：
+
+- `AGENTS.md`：面向 AI agent 的项目规则。
+- `skills/nebulaim-backend/`：仓库内 skill 示例。
+- `tools/mcp/nebulaim-mcp-server.mjs`：最小 stdio MCP server。
+- `tools/mcp/smoke-test.mjs`：MCP 协议 smoke test。
 
 ### 限制
 

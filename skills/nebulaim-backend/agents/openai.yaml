@@ -1,0 +1,4 @@
+interface:
+  display_name: "NebulaIM Backend"
+  short_description: "Workflows for the NebulaIM backend"
+  default_prompt: "Use $nebulaim-backend to plan and validate a NebulaIM backend change."
