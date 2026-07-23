@@ -30,13 +30,15 @@ GatewayRouter::GatewayRouter(ConnectionManager* connection_manager,
                              GatewayBackendClients* backend_clients,
                              PacketCodec* codec,
                              PacketSender packet_sender,
-                             RpcExecutor* rpc_executor)
+                             RpcExecutor* rpc_executor,
+                             RateLimitConfig rate_limit_config)
     : connection_manager_(connection_manager),
       online_manager_(online_manager),
       backend_clients_(backend_clients),
       codec_(codec),
       packet_sender_(std::move(packet_sender)),
-      rpc_executor_(rpc_executor) {}
+      rpc_executor_(rpc_executor),
+      rate_limiter_(rate_limit_config) {}
 
 void GatewayRouter::handlePacket(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet) {
     if (connection_manager_) connection_manager_->updateActiveTime(connection_id);

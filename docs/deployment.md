@@ -12,6 +12,7 @@
 | PushService RPC | 50054 |
 | ConversationService RPC | 50056 |
 | AdminService RPC | 50057 |
+| DeviceService RPC | 50058 |
 | Gateway Metrics | 9100 |
 | UserService Metrics | 9101 |
 | MessageService Metrics | 9102 |
@@ -19,6 +20,7 @@
 | PushService Metrics | 9104 |
 | ConversationService Metrics | 9105 |
 | AdminService Metrics | 9106 |
+| DeviceService Metrics | 9107 |
 | Prometheus | 9090 |
 | Grafana | 3000 |
 | Jaeger UI | 16686 |
@@ -42,7 +44,7 @@ Local `start_services.sh` waits for each service dependency through `wait_ready.
 
 For single-node production with systemd/Nginx/backups, use `docs/single_node_production.md` instead of the local `start_services.sh` workflow.
 
-AdminService is protected by scoped `admin_service.admin_tokens`. Local default config uses development token hashes; replace them for any shared environment.
+AdminService is protected by scoped `admin_service.admin_tokens`. The tracked development config leaves admin tokens empty, so AdminService denies admin RPCs until a local or production config provides token hashes.
 
 ```text
 admin_service.admin_tokens=ops:sha256:<token_sha256_hex>:health,stats,outbox,kafka,cleanup
@@ -64,7 +66,7 @@ Admin cleanup is bounded by config:
 
 ```text
 admin.cleanup.outbox_published_retention_ms=604800000
-admin.cleanup.offline_delivered_retention_ms=604800000
+admin.cleanup.offline_acked_retention_ms=604800000
 admin.cleanup.friend_request_retention_ms=2592000000
 admin.cleanup.message_receipt_retention_ms=7776000000
 admin.cleanup.batch_size=1000
@@ -132,10 +134,10 @@ The lightweight exporter sends OTLP/HTTP JSON batches. It is intentionally depen
 Migration files live in `deploy/mysql/migration/` and are applied in lexical version order. Applied versions are recorded in `schema_migrations`.
 
 ```bash
-MYSQL_HOST=127.0.0.1 MYSQL_PORT=3306 MYSQL_USER=nebula MYSQL_PASSWORD=nebula MYSQL_DATABASE=nebula_im ./scripts/migrate_db.sh
+./scripts/migrate_db.sh config/nebula.conf
 ```
 
-The script acquires a MySQL named lock before applying migrations, exits on the first failed migration, and skips versions already present in `schema_migrations`. In production mode (`NEBULA_ENV=production`) or when `NEBULA_MIGRATE_BACKUP=true`, it runs `scripts/backup_mysql.sh` before applying new versions. Rollback is an operational restore using `scripts/restore_mysql.sh` or hand-written rollback SQL.
+The script reads MySQL connection settings from the config path argument or `NEBULA_CONFIG`; explicit `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, and `MYSQL_DATABASE` environment variables still override config values. It acquires a MySQL named lock before applying migrations, exits on the first failed migration, and skips versions already present in `schema_migrations`. In production mode (`NEBULA_ENV=production`) or when `NEBULA_MIGRATE_BACKUP=true`, it runs `scripts/backup_mysql.sh` before applying new versions. Rollback is an operational restore using `scripts/restore_mysql.sh` or hand-written rollback SQL.
 
 ## Readiness And Health
 
@@ -147,6 +149,8 @@ The script acquires a MySQL named lock before applying migrations, exits on the 
 
 `scripts/health_check.sh` checks MySQL query, Redis ping, Kafka metadata, outbox pending/dead status, service ports, and systemd activity when systemd is available.
 
+`scripts/stop_services.sh` sends SIGTERM to all pid-file services, waits up to `NEBULA_STOP_TIMEOUT_SECONDS` seconds, and uses SIGKILL only for processes that remain alive. NebulaIM service binaries handle SIGTERM/SIGINT by shutting down gRPC servers; PushService then closes its Kafka consumers before exit.
+
 ## Manual Service Startup
 
 ```bash
@@ -156,5 +160,6 @@ The script acquires a MySQL named lock before applying migrations, exits on the 
 ./build/message_service/nebula_message_service --config config/nebula.conf
 ./build/push_service/nebula_push_service --config config/nebula.conf
 ./build/gateway/nebula_gateway --config config/nebula.conf
+./build/device_service/nebula_device_service --config config/nebula.conf
 ./build/admin_service/nebula_admin_service --config config/nebula.conf
 ```

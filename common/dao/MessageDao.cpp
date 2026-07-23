@@ -88,9 +88,12 @@ bool MessageDao::recallMessage(uint64_t message_id, int64_t recalled_at) {
 }
 
 bool MessageDao::recallMessage(MySqlConnection& conn, uint64_t message_id, int64_t recalled_at) {
-    return conn.executeUpdate("UPDATE messages SET recalled=1, recalled_at=" + std::to_string(recalled_at) +
-                              ", updated_at=" + std::to_string(recalled_at) +
-                              " WHERE message_id=" + std::to_string(message_id) + " AND recalled=0");
+    if (!conn.executeUpdate("UPDATE messages SET recalled=1, recalled_at=" + std::to_string(recalled_at) +
+                            ", updated_at=" + std::to_string(recalled_at) +
+                            " WHERE message_id=" + std::to_string(message_id) + " AND recalled=0")) {
+        return false;
+    }
+    return conn.affectedRows() > 0;
 }
 
 }  // namespace nebula

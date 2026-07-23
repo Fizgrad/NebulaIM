@@ -6,6 +6,7 @@
 #include "common/dao/MessageDao.h"
 #include "common/dao/MessageReceiptDao.h"
 #include "common/dao/OfflineMessageDao.h"
+#include "common/dao/RelationDao.h"
 #include "common/dao/UserDao.h"
 #include "common/db/MySqlConnectionPool.h"
 #include "common/kafka/KafkaProducer.h"
@@ -47,6 +48,7 @@ public:
 
     UserDao* userDao();
     GroupDao* groupDao();
+    RelationDao* relationDao();
     MessageDao* messageDao();
     OfflineMessageDao* offlineMessageDao();
     ConversationDao* conversationDao();
@@ -68,6 +70,7 @@ private:
 
     std::unique_ptr<UserDao> user_dao_;
     std::unique_ptr<GroupDao> group_dao_;
+    std::unique_ptr<RelationDao> relation_dao_;
     std::unique_ptr<MessageDao> message_dao_;
     std::unique_ptr<OfflineMessageDao> offline_message_dao_;
     std::unique_ptr<ConversationDao> conversation_dao_;

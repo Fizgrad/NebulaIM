@@ -11,6 +11,18 @@
 
 namespace nebula {
 
+namespace {
+
+proto::MessageData messageForRecipient(uint64_t user_id, const proto::MessageData& message) {
+    proto::MessageData scoped = message;
+    if (scoped.to_user_id() == 0) {
+        scoped.set_to_user_id(user_id);
+    }
+    return scoped;
+}
+
+}  // namespace
+
 PushDispatcher::PushDispatcher(OnlineStatusManager* online_status_manager,
                                GatewayClientManager* gateway_client_manager,
                                OfflineMessageDao* offline_message_dao,
@@ -82,10 +94,11 @@ bool PushDispatcher::deliverOnline(const std::string& request_id, uint64_t user_
 
 bool PushDispatcher::saveOffline(uint64_t user_id, const proto::MessageData& message) {
     if (offline_message_dao_ == nullptr) return false;
+    proto::MessageData scoped = messageForRecipient(user_id, message);
     OfflineMessage offline;
     offline.user_id = user_id;
-    offline.message_id = message.message_id();
-    offline.payload = MessageKafkaPayload::serializeMessageData(message);
+    offline.message_id = scoped.message_id();
+    offline.payload = MessageKafkaPayload::serializeMessageData(scoped);
     offline.status = 0;
     offline.created_at = TimeUtil::nowMs();
     offline.updated_at = offline.created_at;
@@ -94,13 +107,13 @@ bool PushDispatcher::saveOffline(uint64_t user_id, const proto::MessageData& mes
 
 bool PushDispatcher::sendToRetryTopic(uint64_t user_id, const proto::MessageData& message) {
     if (kafka_producer_ == nullptr) return false;
-    std::string payload = MessageKafkaPayload::serializeMessageData(message);
+    std::string payload = MessageKafkaPayload::serializeMessageData(messageForRecipient(user_id, message));
     return kafka_producer_->produce(options_.topic_retry, std::to_string(user_id), payload);
 }
 
 bool PushDispatcher::sendToDlqTopic(uint64_t user_id, const proto::MessageData& message) {
     if (kafka_producer_ == nullptr) return false;
-    std::string payload = MessageKafkaPayload::serializeMessageData(message);
+    std::string payload = MessageKafkaPayload::serializeMessageData(messageForRecipient(user_id, message));
     bool ok = kafka_producer_->produce(options_.topic_dlq, std::to_string(user_id), payload);
     kafka_producer_->flush(5000);
     return ok;

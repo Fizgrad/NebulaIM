@@ -43,7 +43,7 @@ export NEBULA_GRAFANA_PASSWORD='replace-me'
 
 ```bash
 ./scripts/start_deps_prod.sh
-NEBULA_ENV=production MYSQL_PASSWORD="$NEBULA_MYSQL_PASSWORD" ./scripts/migrate_db.sh
+NEBULA_ENV=production ./scripts/migrate_db.sh /etc/nebulaim/nebula.conf
 ./scripts/init_topics.sh
 ```
 

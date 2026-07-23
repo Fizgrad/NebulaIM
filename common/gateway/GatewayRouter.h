@@ -22,7 +22,8 @@ public:
                   GatewayBackendClients* backend_clients,
                   PacketCodec* codec,
                   PacketSender packet_sender = nullptr,
-                  RpcExecutor* rpc_executor = nullptr);
+                  RpcExecutor* rpc_executor = nullptr,
+                  RateLimitConfig rate_limit_config = {});
 
     void handlePacket(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet);
     void setPacketSender(PacketSender packet_sender);

@@ -27,7 +27,8 @@ public:
                   GatewayRouter* router,
                   int worker_threads,
                   int heartbeat_timeout_ms,
-                  std::shared_ptr<TlsContext> tls_context = nullptr);
+                  std::shared_ptr<TlsContext> tls_context = nullptr,
+                  RateLimitConfig rate_limit_config = {});
 
     void start();
 
@@ -36,6 +37,7 @@ private:
     void onMessage(const TcpConnectionPtr& conn, Buffer* buffer);
     void onTcpMessage(const TcpConnectionPtr& conn, Buffer* buffer, const std::string& connection_id);
     void onWebSocketMessage(const TcpConnectionPtr& conn, Buffer* buffer, const std::string& connection_id);
+    bool allowPacket(const TcpConnectionPtr& conn, const std::string& connection_id, uint32_t sequence_id);
     bool tryHandleWebSocketHandshake(const TcpConnectionPtr& conn, Buffer* buffer);
     void sendPacket(const TcpConnectionPtr& conn, const Packet& packet);
     void checkHeartbeatTimeout();

@@ -17,6 +17,7 @@ required_bins=(
     relation_service/nebula_relation_service
     conversation_service/nebula_conversation_service
     message_service/nebula_message_service
+    device_service/nebula_device_service
     push_service/nebula_push_service
     admin_service/nebula_admin_service
     gateway/nebula_gateway

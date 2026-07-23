@@ -25,9 +25,11 @@ GatewayServer::GatewayServer(EventLoop* loop,
                              GatewayRouter* router,
                              int worker_threads,
                              int heartbeat_timeout_ms,
-                             std::shared_ptr<TlsContext> tls_context)
+                             std::shared_ptr<TlsContext> tls_context,
+                             RateLimitConfig rate_limit_config)
     : loop_(loop), server_(loop, listen_addr, "GatewayTcpServer"), gateway_id_(std::move(gateway_id)),
-      connection_manager_(connection_manager), online_manager_(online_manager), router_(router), heartbeat_timeout_ms_(heartbeat_timeout_ms) {
+      connection_manager_(connection_manager), online_manager_(online_manager), router_(router), rate_limiter_(rate_limit_config),
+      heartbeat_timeout_ms_(heartbeat_timeout_ms) {
     server_.setThreadNum(worker_threads);
     server_.setTlsContext(std::move(tls_context));
     server_.setConnectionCallback([this](const TcpConnectionPtr& conn) { onConnection(conn); });
@@ -59,6 +61,7 @@ void GatewayServer::onConnection(const TcpConnectionPtr& conn) {
         if (ctx.has_value() && ctx->authenticated) {
             online_manager_->setOfflineAsync(ctx->user_id, ctx->device_id, id);
         }
+        rate_limiter_.clearConnection(id);
         connection_manager_->removeConnection(id);
         std::lock_guard<std::mutex> lock(conn_id_mutex_);
         conn_name_to_id_.erase(conn->name());
@@ -85,12 +88,6 @@ void GatewayServer::onMessage(const TcpConnectionPtr& conn, Buffer* buffer) {
         if (connection_manager_ != nullptr) connection_manager_->markWebSocket(id, true);
         websocket = true;
     }
-    if (!rate_limiter_.allowPacket(id)) {
-        MetricsRegistry::instance().counter("nebula_gateway_rate_limited_total", "Gateway requests rejected by rate limiting").inc();
-        Packet error = GatewayPacketHelper::makeErrorResponse(0, static_cast<int>(ErrorCode::RATE_LIMITED), "rate limited", "");
-        sendPacket(conn, error);
-        return;
-    }
     if (websocket) {
         onWebSocketMessage(conn, buffer, id);
         return;
@@ -102,7 +99,13 @@ void GatewayServer::onTcpMessage(const TcpConnectionPtr& conn, Buffer* buffer, c
     while (buffer->readableBytes() >= kPacketHeaderLength) {
         Packet packet;
         ProtocolError err = codec_.decode(buffer, &packet);
-        if (err == ProtocolError::OK) router_->handlePacket(conn, id, packet);
+        if (err == ProtocolError::OK) {
+            if (!allowPacket(conn, id, packet.sequence_id)) {
+                buffer->retrieveAll();
+                return;
+            }
+            router_->handlePacket(conn, id, packet);
+        }
         else if (err == ProtocolError::INCOMPLETE_PACKET) break;
         else {
             Packet error = GatewayPacketHelper::makeErrorResponse(0, static_cast<int>(ErrorCode::GATEWAY_INVALID_PACKET), protocolErrorToString(err), "");
@@ -146,7 +149,10 @@ void GatewayServer::onWebSocketMessage(const TcpConnectionPtr& conn, Buffer* buf
         while (packet_buffer.readableBytes() >= kPacketHeaderLength) {
             Packet packet;
             ProtocolError err = codec_.decode(&packet_buffer, &packet);
-            if (err == ProtocolError::OK) router_->handlePacket(conn, id, packet);
+            if (err == ProtocolError::OK) {
+                if (!allowPacket(conn, id, packet.sequence_id)) return;
+                router_->handlePacket(conn, id, packet);
+            }
             else if (err == ProtocolError::INCOMPLETE_PACKET) break;
             else {
                 Packet error = GatewayPacketHelper::makeErrorResponse(0, static_cast<int>(ErrorCode::GATEWAY_INVALID_PACKET), protocolErrorToString(err), "");
@@ -156,6 +162,14 @@ void GatewayServer::onWebSocketMessage(const TcpConnectionPtr& conn, Buffer* buf
             }
         }
     }
+}
+
+bool GatewayServer::allowPacket(const TcpConnectionPtr& conn, const std::string& connection_id, uint32_t sequence_id) {
+    if (rate_limiter_.allowPacket(connection_id)) return true;
+    MetricsRegistry::instance().counter("nebula_gateway_rate_limited_total", "Gateway requests rejected by rate limiting").inc();
+    Packet error = GatewayPacketHelper::makeErrorResponse(sequence_id, static_cast<int>(ErrorCode::RATE_LIMITED), "rate limited", "");
+    sendPacket(conn, error);
+    return false;
 }
 
 bool GatewayServer::tryHandleWebSocketHandshake(const TcpConnectionPtr& conn, Buffer* buffer) {

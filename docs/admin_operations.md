@@ -24,9 +24,9 @@ Supported scopes are `health`, `stats`, `outbox`, `kafka`, `cleanup`, and `*`.
 - `GetSystemStats`: counts online users and active device connections from Redis.
 - `GetOutboxStats`: groups outbox rows by status.
 - `GetKafkaLagInfo`: queries Kafka consumer lag.
-- `RunCleanup`: bounded cleanup for published outbox rows, delivered offline rows, handled friend requests, old receipts, and stale Redis online devices.
+- `RunCleanup`: bounded cleanup for published outbox rows, acked offline rows, handled friend requests, old receipts, and stale Redis online devices.
 - `ValidateConfig`: reports production-risk config issues such as missing admin tokens, empty passwords, public Gateway without TLS, or tracing enabled without endpoint.
-- `GetServiceOverview`: TCP readiness view for Gateway, gRPC services, and AdminService.
+- `GetServiceOverview`: TCP readiness view for Gateway, business gRPC services, DeviceService, and AdminService.
 - `ListAuditEvents`: returns recent in-memory allow/deny admin audit events.
 
 ## Notes

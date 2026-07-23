@@ -52,10 +52,13 @@ bool FriendRequestDao::updateStatus(MySqlConnection& conn,
                                     uint64_t request_id,
                                     FriendRequestStatus from_status,
                                     FriendRequestStatus to_status) {
-    return conn.executeUpdate("UPDATE friend_requests SET status=" + std::to_string(static_cast<int>(to_status)) +
-                              ", updated_at=" + std::to_string(TimeUtil::nowMs()) +
-                              " WHERE request_id=" + std::to_string(request_id) +
-                              " AND status=" + std::to_string(static_cast<int>(from_status)));
+    if (!conn.executeUpdate("UPDATE friend_requests SET status=" + std::to_string(static_cast<int>(to_status)) +
+                            ", updated_at=" + std::to_string(TimeUtil::nowMs()) +
+                            " WHERE request_id=" + std::to_string(request_id) +
+                            " AND status=" + std::to_string(static_cast<int>(from_status)))) {
+        return false;
+    }
+    return conn.affectedRows() > 0;
 }
 
 bool FriendRequestDao::updateStatus(uint64_t request_id, FriendRequestStatus from_status, FriendRequestStatus to_status) {

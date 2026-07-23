@@ -23,7 +23,11 @@ bool KafkaConsumer::init(const KafkaConsumerConfig& config) {
         conf->set("client.id", config.client_id, errstr) != RdKafka::Conf::CONF_OK ||
         conf->set("enable.auto.commit", config.enable_auto_commit ? "true" : "false", errstr) != RdKafka::Conf::CONF_OK ||
         conf->set("enable.auto.offset.store", config.enable_auto_commit ? "true" : "false", errstr) != RdKafka::Conf::CONF_OK ||
-        conf->set("auto.offset.reset", "earliest", errstr) != RdKafka::Conf::CONF_OK) {
+        conf->set("session.timeout.ms", std::to_string(config.session_timeout_ms), errstr) != RdKafka::Conf::CONF_OK ||
+        conf->set("heartbeat.interval.ms", std::to_string(config.heartbeat_interval_ms), errstr) != RdKafka::Conf::CONF_OK ||
+        conf->set("max.poll.interval.ms", std::to_string(config.max_poll_interval_ms), errstr) != RdKafka::Conf::CONF_OK ||
+        conf->set("fetch.wait.max.ms", std::to_string(config.fetch_wait_max_ms), errstr) != RdKafka::Conf::CONF_OK ||
+        conf->set("auto.offset.reset", config.auto_offset_reset, errstr) != RdKafka::Conf::CONF_OK) {
         LOG_ERROR("Kafka consumer config failed: " + errstr);
         return false;
     }
@@ -101,6 +105,11 @@ std::vector<KafkaLagRecord> KafkaConsumer::queryLag(const KafkaConsumerConfig& c
     if (conf->set("bootstrap.servers", config.brokers, errstr) != RdKafka::Conf::CONF_OK ||
         conf->set("group.id", config.group_id, errstr) != RdKafka::Conf::CONF_OK ||
         conf->set("client.id", config.client_id.empty() ? "nebula-admin-lag" : config.client_id + "-lag", errstr) != RdKafka::Conf::CONF_OK ||
+        conf->set("session.timeout.ms", std::to_string(config.session_timeout_ms), errstr) != RdKafka::Conf::CONF_OK ||
+        conf->set("heartbeat.interval.ms", std::to_string(config.heartbeat_interval_ms), errstr) != RdKafka::Conf::CONF_OK ||
+        conf->set("max.poll.interval.ms", std::to_string(config.max_poll_interval_ms), errstr) != RdKafka::Conf::CONF_OK ||
+        conf->set("fetch.wait.max.ms", std::to_string(config.fetch_wait_max_ms), errstr) != RdKafka::Conf::CONF_OK ||
+        conf->set("auto.offset.reset", config.auto_offset_reset, errstr) != RdKafka::Conf::CONF_OK ||
         conf->set("enable.auto.commit", "false", errstr) != RdKafka::Conf::CONF_OK) {
         if (error_message != nullptr) *error_message = errstr;
         return records;

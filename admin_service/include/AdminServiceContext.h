@@ -20,7 +20,7 @@ namespace nebula {
 
 struct AdminCleanupOptions {
     int64_t outbox_published_retention_ms = 7LL * 24 * 3600 * 1000;
-    int64_t offline_delivered_retention_ms = 7LL * 24 * 3600 * 1000;
+    int64_t offline_acked_retention_ms = 7LL * 24 * 3600 * 1000;
     int64_t friend_request_retention_ms = 30LL * 24 * 3600 * 1000;
     int64_t message_receipt_retention_ms = 90LL * 24 * 3600 * 1000;
     int cleanup_batch_size = 1000;

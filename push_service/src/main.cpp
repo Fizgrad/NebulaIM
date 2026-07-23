@@ -1,6 +1,7 @@
 #include "PushServiceContext.h"
 #include "PushServiceImpl.h"
 
+#include "common/app/ShutdownSignal.h"
 #include "common/log/Logger.h"
 #include "common/monitor/MetricsRuntime.h"
 #include "common/rpc/GrpcTlsCredentials.h"
@@ -55,6 +56,9 @@ int main(int argc, char* argv[]) {
     }
     LOG_INFO("PushService listening on " + context.listenAddress());
     auto metrics_server = nebula::startMetricsServerFromConfig(config_path, "push_service", 9104);
+    nebula::ShutdownSignalWatcher shutdown([&server]() {
+        if (server) server->Shutdown();
+    });
     server->Wait();
     context.stopWorkers();
     return 0;

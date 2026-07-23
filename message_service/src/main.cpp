@@ -1,6 +1,7 @@
 #include "MessageServiceContext.h"
 #include "MessageServiceImpl.h"
 
+#include "common/app/ShutdownSignal.h"
 #include "common/log/Logger.h"
 #include "common/monitor/MetricsRuntime.h"
 #include "common/rpc/GrpcTlsCredentials.h"
@@ -34,7 +35,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    nebula::MessageServiceImpl service(context.userDao(), context.groupDao(), context.messageDao(),
+    nebula::MessageServiceImpl service(context.userDao(), context.groupDao(), context.relationDao(), context.messageDao(),
                                        context.offlineMessageDao(), context.redisClient(), context.kafkaProducer(),
                                        context.messageIdGenerator(), context.messageDeduplicator(), context.options(),
                                        context.mysqlPool(), context.conversationDao(), context.messageReceiptDao(), context.outboxDao());
@@ -57,6 +58,9 @@ int main(int argc, char* argv[]) {
 
     LOG_INFO("MessageService listening on " + context.listenAddress());
     auto metrics_server = nebula::startMetricsServerFromConfig(config_path, "message_service", 9102);
+    nebula::ShutdownSignalWatcher shutdown([&server]() {
+        if (server) server->Shutdown();
+    });
     server->Wait();
     return 0;
 #else

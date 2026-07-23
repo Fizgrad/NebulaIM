@@ -6,7 +6,7 @@ Browser       -> WS/WSS Binary + PacketCodec ----------+--> Gateway
                                                              |
                                                              | bounded gRPC/RpcExecutor
                                                              v
-UserService / RelationService / ConversationService / MessageService
+UserService / RelationService / ConversationService / MessageService / DeviceService
                                                              |
                                                              v
                                                           MySQL + Redis

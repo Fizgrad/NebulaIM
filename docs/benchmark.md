@@ -1,11 +1,35 @@
-# Benchmark Report
+# Benchmark
 
-| Scenario | Connections | Requests | QPS | Avg Latency | P90 | P99 | Success Rate |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Login | 100 | 10000 | Measure per environment | Measure per environment | Measure per environment | Measure per environment | Measure per environment |
-| Single Message | 100 | 10000 | Measure per environment | Measure per environment | Measure per environment | Measure per environment | Measure per environment |
-| Group Message | 100 | 10000 | Measure per environment | Measure per environment | Measure per environment | Measure per environment | Measure per environment |
-| Push E2E | 100 pairs | 10000 | Measure per environment | Measure per environment | Measure per environment | Measure per environment | Measure per environment |
+NebulaIM benchmark binaries generate real Gateway traffic. They report total requests, success/failure count, duration, QPS, average latency, P50, P90, P99 and max latency.
+
+## Scenarios
+
+| Tool | Path measured |
+|---|---|
+| `bench_tcp_connections` | Raw TCP connect and hold |
+| `bench_gateway_login` | WebSocket handshake, Register setup, Login response latency |
+| `bench_single_message` | WebSocket Login setup, SendSingleMessage response latency |
+| `bench_group_message` | WebSocket Login setup, optional RelationService CreateGroup, SendGroupMessage response latency |
+| `bench_push_e2e` | WebSocket Login setup, SendSingleMessage to receiver `PUSH_MSG` latency |
+
+## Run
+
+```bash
+./scripts/health_check.sh config/nebula.conf
+./build/benchmark/bench_tcp_connections --host 127.0.0.1 --port 9000 --connections 1000 --rate 100 --duration 30
+./build/benchmark/bench_gateway_login --host 127.0.0.1 --port 9000 --requests 1000
+./build/benchmark/bench_single_message --host 127.0.0.1 --port 9000 --clients 10 --requests 1000
+./build/benchmark/bench_group_message --host 127.0.0.1 --port 9000 --relation-addr 127.0.0.1:50053 --requests 1000
+./build/benchmark/bench_push_e2e --host 127.0.0.1 --port 9000 --pairs 10 --requests 100
+```
+
+If internal RPC auth is enabled, pass the raw internal token to the group benchmark so it can create the setup group:
+
+```bash
+./build/benchmark/bench_group_message --internal-token "$NEBULA_INTERNAL_TOKEN"
+```
+
+To benchmark an existing group instead, pass `--group-id`; the benchmark first joins the generated sender user to that group through RelationService.
 
 ## Environment
 

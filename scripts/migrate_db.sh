@@ -3,12 +3,27 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MIGRATION_DIR="${ROOT_DIR}/deploy/mysql/migration"
+CONFIG="${1:-${NEBULA_CONFIG:-}}"
 
-MYSQL_HOST="${MYSQL_HOST:-127.0.0.1}"
-MYSQL_PORT="${MYSQL_PORT:-3306}"
-MYSQL_USER="${MYSQL_USER:-nebula}"
-MYSQL_PASSWORD="${MYSQL_PASSWORD:-nebula}"
-MYSQL_DATABASE="${MYSQL_DATABASE:-nebula_im}"
+get_cfg() {
+    local key="$1"
+    local default="${2:-}"
+    if [[ -n "${CONFIG}" && -f "${CONFIG}" ]]; then
+        local value
+        value="$(awk -F= -v key="${key}" '$0 !~ /^[[:space:]]*#/ && $1 == key {print substr($0, index($0, "=") + 1)}' "${CONFIG}" | tail -n 1)"
+        if [[ -n "${value}" ]]; then
+            echo "${value}"
+            return
+        fi
+    fi
+    echo "${default}"
+}
+
+MYSQL_HOST="${MYSQL_HOST:-$(get_cfg mysql.host 127.0.0.1)}"
+MYSQL_PORT="${MYSQL_PORT:-$(get_cfg mysql.port 3306)}"
+MYSQL_USER="${MYSQL_USER:-$(get_cfg mysql.user nebula)}"
+MYSQL_PASSWORD="${MYSQL_PASSWORD:-$(get_cfg mysql.password nebula)}"
+MYSQL_DATABASE="${MYSQL_DATABASE:-$(get_cfg mysql.database nebula_im)}"
 MIGRATION_LOCK_NAME="${MIGRATION_LOCK_NAME:-nebulaim_schema_migrations}"
 MIGRATION_LOCK_TIMEOUT="${MIGRATION_LOCK_TIMEOUT:-30}"
 NEBULA_MIGRATE_BACKUP="${NEBULA_MIGRATE_BACKUP:-false}"

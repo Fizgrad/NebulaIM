@@ -1,3 +1,4 @@
+#include "TestDeps.h"
 #include "common/auth/PasswordHasher.h"
 #include "common/config/Config.h"
 #include "common/dao/GroupDao.h"
@@ -9,18 +10,6 @@
 #include <cassert>
 
 namespace {
-nebula::MySqlConfig mysqlConfig() {
-    nebula::Config config;
-    assert(config.loadFromFile("config/nebula.conf"));
-    nebula::MySqlConfig mysql;
-    mysql.host = config.getString("mysql.host", mysql.host);
-    mysql.port = config.getInt("mysql.port", mysql.port);
-    mysql.user = config.getString("mysql.user", mysql.user);
-    mysql.password = config.getString("mysql.password", mysql.password);
-    mysql.database = config.getString("mysql.database", mysql.database);
-    return mysql;
-}
-
 nebula::User makeUser(const std::string& prefix) {
     int64_t now = nebula::TimeUtil::nowMs();
     nebula::User user;
@@ -35,7 +24,8 @@ nebula::User makeUser(const std::string& prefix) {
 
 int main() {
     nebula::MySqlConnectionPool pool;
-    assert(pool.init(mysqlConfig(), 2));
+    std::string reason;
+    if (!nebula::tests::initMySqlPool(&pool, 2, &reason)) return nebula::tests::skip("test_group_dao_extra", reason);
     nebula::UserDao user_dao(pool);
     nebula::GroupDao group_dao(pool);
 

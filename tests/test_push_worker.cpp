@@ -1,3 +1,4 @@
+#include "TestDeps.h"
 #include "PushServiceContext.h"
 #include "common/kafka/KafkaProducer.h"
 #include "common/message/MessageKafkaPayload.h"
@@ -8,7 +9,7 @@
 
 int main() {
     nebula::PushServiceContext context;
-    assert(context.init("config/nebula.conf"));
+    if (!context.init("config/nebula.conf")) return nebula::tests::skip("test_push_worker", "PushService dependencies are not reachable");
     assert(context.startWorkers());
 
     nebula::Config config;

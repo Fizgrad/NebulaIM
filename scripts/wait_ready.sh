@@ -70,6 +70,10 @@ wait_conversation() {
     wait_tcp conversation-service "$(get_cfg conversation_service.host 127.0.0.1)" "$(get_cfg conversation_service.port 50056)"
 }
 
+wait_device() {
+    wait_tcp device-service "$(get_cfg device_service.host 127.0.0.1)" "$(get_cfg device_service.port 50058)"
+}
+
 wait_gateway_rpc() {
     wait_tcp gateway-rpc "$(get_cfg gateway.rpc.host 127.0.0.1)" "$(get_cfg gateway.rpc.port 50055)"
 }
@@ -78,6 +82,11 @@ case "${SERVICE}" in
     user|conversation|admin)
         wait_mysql
         wait_redis
+        ;;
+    device)
+        wait_mysql
+        wait_redis
+        wait_gateway_rpc
         ;;
     relation)
         wait_mysql
@@ -112,9 +121,10 @@ case "${SERVICE}" in
         wait_conversation
         wait_message
         wait_gateway_rpc
+        wait_device
         ;;
     *)
-        echo "usage: $0 <config> {user|relation|conversation|message|gateway|push|admin|all}" >&2
+        echo "usage: $0 <config> {user|relation|conversation|device|message|gateway|push|admin|all}" >&2
         exit 2
         ;;
 esac

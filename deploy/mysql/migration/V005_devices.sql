@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS user_devices (
     device_id VARCHAR(128) NOT NULL,
     platform VARCHAR(32) NOT NULL,
     device_name VARCHAR(128) NOT NULL DEFAULT '',
-    token VARCHAR(255) NOT NULL DEFAULT '',
+    token_hash VARCHAR(64) NOT NULL DEFAULT '',
     last_login_at BIGINT NOT NULL,
     last_active_at BIGINT NOT NULL,
     created_at BIGINT NOT NULL,

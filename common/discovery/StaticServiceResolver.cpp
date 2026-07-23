@@ -26,6 +26,7 @@ bool StaticServiceResolver::loadFromConfig(const Config& config) {
     addInstance("message_service", config.getString("message_service.addr", "127.0.0.1:50052"));
     addInstance("relation_service", config.getString("relation_service.addr", "127.0.0.1:50053"));
     addInstance("conversation_service", config.getString("conversation_service.addr", "127.0.0.1:50056"));
+    addInstance("device_service", config.getString("device_service.addr", "127.0.0.1:50058"));
     addInstance("push_service", config.getString("push_service.addr", "127.0.0.1:50054"));
     addInstance("admin_service", config.getString("admin_service.addr", "127.0.0.1:50057"));
 

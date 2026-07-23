@@ -13,7 +13,7 @@ Native Client
   -> TCP PacketCodec
   -> Gateway
   -> bounded gRPC RpcExecutor
-UserService / RelationService / MessageService / ConversationService / PushService
+UserService / RelationService / MessageService / ConversationService / DeviceService / PushService
 
 Browser
   -> Web Bridge /ws
@@ -38,11 +38,12 @@ AdminService
 - Bounded asynchronous Gateway backend RPC executor.
 - User registration, login, token validation, refresh and logout.
 - Password hashing and Redis token storage with hashed token keys.
+- DeviceService lists devices and revokes one or all devices by clearing token hash, Redis online keys and best-effort Gateway connection state.
 - Username lookup for frontend friend requests.
 - RelationService friend requests, friends, groups, group search and group membership.
-- MessageService direct/group text and image messages, message IDs, deduplication, persistence, conversations, recall and outbox publication.
+- MessageService friend-only direct messages, group-member messages, text/image content, message IDs, deduplication, authorized ACK/read markers, persistence, conversations, recall and outbox publication.
 - ConversationService list/history/read marker support.
-- PushService Kafka manual commit after successful handling, retry and DLQ paths.
+- PushService Kafka manual commit after successful handling, low-latency consumer tuning, retry and DLQ paths.
 - Multi-device online state keyed by user, device and Gateway connection.
 - Optional internal gRPC metadata auth with `x-nebula-internal-token`.
 - Scoped AdminService tokens with `x-nebula-admin-token`.
@@ -74,6 +75,8 @@ Stop services:
 ./scripts/stop_services.sh
 ./scripts/stop_deps.sh
 ```
+
+`stop_services.sh` sends SIGTERM to service processes, waits up to `NEBULA_STOP_TIMEOUT_SECONDS` seconds, and then sends SIGKILL only to processes that did not exit.
 
 ### Build
 
@@ -121,6 +124,7 @@ NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e
 | RelationService | 50053 |
 | PushService | 50054 |
 | ConversationService | 50056 |
+| DeviceService | 50058 |
 | AdminService | 50057 |
 | Prometheus | 9090 |
 | Grafana | 3000 |
@@ -140,6 +144,7 @@ RelationService 9103
 PushService 9104
 ConversationService 9105
 AdminService 9106
+DeviceService 9107
 ```
 
 ### Production Notes
@@ -177,6 +182,7 @@ Topic documents under `docs/` describe the current backend internals:
 - `docs/rpc.md`
 - `docs/storage.md`
 - `docs/user_service.md`
+- `docs/device_service.md`
 - `docs/message_service.md`
 - `docs/relation_service.md`
 - `docs/push_service.md`
@@ -210,7 +216,7 @@ NebulaIM 是一个 C++17 分布式即时通信后端。它包含自研 epoll/Rea
   -> TCP PacketCodec
   -> Gateway
   -> 有界 gRPC RpcExecutor
-UserService / RelationService / MessageService / ConversationService / PushService
+UserService / RelationService / MessageService / ConversationService / DeviceService / PushService
 
 浏览器
   -> Web Bridge /ws
@@ -235,11 +241,12 @@ AdminService
 - Gateway 后端 RPC 使用有界异步执行器。
 - 用户注册、登录、token 校验、刷新和登出。
 - 密码哈希存储，Redis token key 使用 token 哈希。
+- DeviceService 支持设备列表和踢出单个/全部设备，会清理 token 哈希、Redis 在线键，并尽力关闭 Gateway 连接。
 - 支持按 username 查询用户，用于前端添加好友。
 - RelationService 支持好友请求、好友、群组、群搜索和群成员。
-- MessageService 支持单聊/群聊文本和图片消息、消息 ID、去重、持久化、会话更新、撤回和 outbox 发布。
+- MessageService 支持好友单聊、群成员群聊、文本和图片消息、消息 ID、去重、ACK/已读权限校验、持久化、会话更新、撤回和 outbox 发布。
 - ConversationService 支持会话列表、历史消息和已读标记。
-- PushService 在处理成功后手动提交 Kafka offset，并支持重试和 DLQ 路径。
+- PushService 在处理成功后手动提交 Kafka offset，并支持低延迟 consumer 配置、重试和 DLQ 路径。
 - 多设备在线状态按 user、device 和 Gateway connection 记录。
 - 可选内部 gRPC metadata 鉴权，使用 `x-nebula-internal-token`。
 - AdminService 使用 scoped token，metadata key 为 `x-nebula-admin-token`。
@@ -271,6 +278,8 @@ AdminService
 ./scripts/stop_services.sh
 ./scripts/stop_deps.sh
 ```
+
+`stop_services.sh` 会先发送 SIGTERM，等待最多 `NEBULA_STOP_TIMEOUT_SECONDS` 秒，只对未退出的进程发送 SIGKILL。
 
 ### 构建
 
@@ -318,6 +327,7 @@ NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e
 | RelationService | 50053 |
 | PushService | 50054 |
 | ConversationService | 50056 |
+| DeviceService | 50058 |
 | AdminService | 50057 |
 | Prometheus | 9090 |
 | Grafana | 3000 |
@@ -337,6 +347,7 @@ RelationService 9103
 PushService 9104
 ConversationService 9105
 AdminService 9106
+DeviceService 9107
 ```
 
 ### 生产配置
@@ -374,6 +385,7 @@ systemd、Nginx TLS 终止、备份、恢复和健康检查见 `docs/single_node
 - `docs/rpc.md`
 - `docs/storage.md`
 - `docs/user_service.md`
+- `docs/device_service.md`
 - `docs/message_service.md`
 - `docs/relation_service.md`
 - `docs/push_service.md`

@@ -28,6 +28,21 @@ PushService defaults to all online devices for a user. The production online-sta
 
 When PushService delivers to a browser connection, GatewayService wraps the `PUSH_MSG` packet in a WebSocket binary frame before writing to the socket. Native TCP clients still receive raw NebulaIM Packet bytes.
 
+## Kafka consumer config
+
+PushService reads these settings from config:
+
+```text
+kafka.consumer.enable_auto_commit=false
+kafka.consumer.auto_offset_reset=earliest
+kafka.consumer.session_timeout_ms=6000
+kafka.consumer.heartbeat_interval_ms=2000
+kafka.consumer.max_poll_interval_ms=300000
+kafka.consumer.fetch_wait_max_ms=50
+```
+
+`auto_offset_reset=earliest` is used only when the consumer group has no committed offset. The short session timeout and heartbeat interval reduce the window where a restarted PushService waits for an old consumer-group member to expire. `fetch_wait_max_ms=50` keeps broker-side fetch waits low for interactive message delivery. Keep `heartbeat_interval_ms` lower than `session_timeout_ms`.
+
 ## Retry and DLQ
 
 Retry count key:

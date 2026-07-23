@@ -1,3 +1,4 @@
+#include "TestDeps.h"
 #include "common/config/Config.h"
 #include "common/push/OnlineStatusManager.h"
 #include "common/redis/RedisClient.h"
@@ -5,13 +6,9 @@
 #include <cassert>
 
 int main() {
-    nebula::Config config;
-    assert(config.loadFromFile("config/nebula.conf"));
-    nebula::RedisConfig redis;
-    redis.host = config.getString("redis.host", redis.host);
-    redis.port = config.getInt("redis.port", redis.port);
     nebula::RedisClient client;
-    assert(client.connect(redis));
+    std::string reason;
+    if (!nebula::tests::connectRedis(&client, &reason)) return nebula::tests::skip("test_online_status_manager", reason);
     nebula::OnlineStatusManager manager(&client);
     uint64_t uid = 91001;
     assert(manager.setOnline(uid, "device-1", "gateway-1", "conn-1", 60));

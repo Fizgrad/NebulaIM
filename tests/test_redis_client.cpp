@@ -1,3 +1,4 @@
+#include "TestDeps.h"
 #include "common/config/Config.h"
 #include "common/redis/RedisClient.h"
 
@@ -5,18 +6,9 @@
 #include <cassert>
 
 int main() {
-    nebula::Config config;
-    assert(config.loadFromFile("config/nebula.conf"));
-
-    nebula::RedisConfig redis;
-    redis.host = config.getString("redis.host", redis.host);
-    redis.port = config.getInt("redis.port", redis.port);
-    redis.timeout_ms = config.getInt("redis.timeout_ms", redis.timeout_ms);
-    redis.password = config.getString("redis.password", redis.password);
-
     nebula::RedisClient client;
-    assert(client.connect(redis));
-    assert(client.ping());
+    std::string reason;
+    if (!nebula::tests::connectRedis(&client, &reason)) return nebula::tests::skip("test_redis_client", reason);
 
     assert(client.set("nebula:test:string", "value"));
     assert(client.get("nebula:test:string").value() == "value");

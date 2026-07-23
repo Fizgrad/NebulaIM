@@ -10,7 +10,12 @@ struct KafkaConsumerConfig {
     std::string brokers = "127.0.0.1:9092";
     std::string group_id = "nebula-consumer";
     std::string client_id = "nebula-consumer-client";
+    std::string auto_offset_reset = "earliest";
     bool enable_auto_commit = false;
+    int session_timeout_ms = 6000;
+    int heartbeat_interval_ms = 2000;
+    int max_poll_interval_ms = 300000;
+    int fetch_wait_max_ms = 50;
 };
 
 struct KafkaMessage {

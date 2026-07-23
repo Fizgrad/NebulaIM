@@ -61,7 +61,7 @@ bool OfflineMessageDao::insertOfflineMessage(const OfflineMessage& message) {
                       std::to_string(message.user_id) + "," + std::to_string(message.message_id) + ",'" +
                       conn->escapeString(toHex(message.payload)) + "'," + std::to_string(message.status) + "," +
                       std::to_string(message.created_at) + "," + std::to_string(message.updated_at) +
-                      ") ON DUPLICATE KEY UPDATE payload=VALUES(payload), status=VALUES(status), updated_at=VALUES(updated_at)";
+                      ") ON DUPLICATE KEY UPDATE payload=IF(status=2,payload,VALUES(payload)), status=IF(status=2,status,VALUES(status)), updated_at=IF(status=2,updated_at,VALUES(updated_at))";
     return conn->executeUpdate(sql);
 }
 
@@ -70,19 +70,20 @@ std::vector<OfflineMessage> OfflineMessageDao::listOfflineMessages(uint64_t user
     auto conn = pool_.acquire();
     if (!conn) return messages;
     auto result = conn->executeQuery("SELECT * FROM offline_messages WHERE user_id=" + std::to_string(user_id) +
-                                     " AND status=0 ORDER BY created_at ASC, message_id ASC LIMIT " + std::to_string(limit));
+                                     " AND status IN (0,1) ORDER BY created_at ASC, message_id ASC LIMIT " + std::to_string(limit));
     while (result && result->next()) messages.push_back(parseOffline(*result));
     return messages;
 }
 
-bool OfflineMessageDao::markAsDelivered(uint64_t user_id, uint64_t message_id) {
+bool OfflineMessageDao::markAsPulled(uint64_t user_id, uint64_t message_id) {
     auto conn = pool_.acquire();
     if (!conn) return false;
     return conn->executeUpdate("UPDATE offline_messages SET status=1, updated_at=UNIX_TIMESTAMP()*1000 WHERE user_id=" +
-                               std::to_string(user_id) + " AND message_id=" + std::to_string(message_id));
+                               std::to_string(user_id) + " AND message_id=" + std::to_string(message_id) +
+                               " AND status IN (0,1)");
 }
 
-bool OfflineMessageDao::markBatchAsDelivered(uint64_t user_id, const std::vector<uint64_t>& message_ids) {
+bool OfflineMessageDao::markBatchAsPulled(uint64_t user_id, const std::vector<uint64_t>& message_ids) {
     if (message_ids.empty()) return true;
     auto conn = pool_.acquire();
     if (!conn) return false;
@@ -92,13 +93,21 @@ bool OfflineMessageDao::markBatchAsDelivered(uint64_t user_id, const std::vector
         ids += std::to_string(message_ids[i]);
     }
     return conn->executeUpdate("UPDATE offline_messages SET status=1, updated_at=UNIX_TIMESTAMP()*1000 WHERE user_id=" +
-                               std::to_string(user_id) + " AND message_id IN (" + ids + ")");
+                               std::to_string(user_id) + " AND message_id IN (" + ids + ") AND status IN (0,1)");
 }
 
-bool OfflineMessageDao::deleteDeliveredMessages(uint64_t user_id) {
+bool OfflineMessageDao::markAsAcked(uint64_t user_id, uint64_t message_id) {
     auto conn = pool_.acquire();
     if (!conn) return false;
-    return conn->executeUpdate("DELETE FROM offline_messages WHERE user_id=" + std::to_string(user_id) + " AND status=1");
+    return conn->executeUpdate("UPDATE offline_messages SET status=2, updated_at=UNIX_TIMESTAMP()*1000 WHERE user_id=" +
+                               std::to_string(user_id) + " AND message_id=" + std::to_string(message_id) +
+                               " AND status IN (0,1,2)");
+}
+
+bool OfflineMessageDao::deleteAckedMessages(uint64_t user_id) {
+    auto conn = pool_.acquire();
+    if (!conn) return false;
+    return conn->executeUpdate("DELETE FROM offline_messages WHERE user_id=" + std::to_string(user_id) + " AND status=2");
 }
 
 }  // namespace nebula

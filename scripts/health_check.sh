@@ -161,10 +161,11 @@ check_tcp message-service "$(get_cfg message_service.host 127.0.0.1)" "$(get_cfg
 check_tcp relation-service "$(get_cfg relation_service.host 127.0.0.1)" "$(get_cfg relation_service.port 50053)" || failures=$((failures + 1))
 check_tcp push-service "$(get_cfg push_service.host 127.0.0.1)" "$(get_cfg push_service.port 50054)" || failures=$((failures + 1))
 check_tcp conversation-service "$(get_cfg conversation_service.host 127.0.0.1)" "$(get_cfg conversation_service.port 50056)" || failures=$((failures + 1))
+check_tcp device-service "$(get_cfg device_service.host 127.0.0.1)" "$(get_cfg device_service.port 50058)" || failures=$((failures + 1))
 check_tcp admin-service "$(get_cfg admin_service.host 127.0.0.1)" "$(get_cfg admin_service.port 50057)" || failures=$((failures + 1))
 
 if command -v systemctl >/dev/null 2>&1; then
-    for unit in nebula-user nebula-relation nebula-conversation nebula-message nebula-push nebula-admin nebula-gateway; do
+    for unit in nebula-user nebula-relation nebula-conversation nebula-message nebula-gateway nebula-device nebula-push nebula-admin; do
         if systemctl is-active --quiet "${unit}.service"; then
             echo "[health][OK] ${unit}.service active"
         else

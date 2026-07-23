@@ -1,3 +1,4 @@
+#include "TestDeps.h"
 #include "PushServiceContext.h"
 #include "PushServiceImpl.h"
 #include "common/utils/TimeUtil.h"
@@ -7,7 +8,7 @@
 
 int main() {
     nebula::PushServiceContext context;
-    assert(context.init("config/nebula.conf"));
+    if (!context.init("config/nebula.conf")) return nebula::tests::skip("test_push_service_impl", "PushService dependencies are not reachable");
     nebula::PushServiceImpl service(context.dispatcher());
     grpc::ServerContext server_context;
 

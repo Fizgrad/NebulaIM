@@ -1,7 +1,7 @@
 [Unit]
 Description=NebulaIM single-node service group
 Documentation=/opt/nebulaim/docs/single_node_production.md
-Wants=nebula-user.service nebula-relation.service nebula-conversation.service nebula-message.service nebula-push.service nebula-admin.service nebula-gateway.service
+Wants=nebula-user.service nebula-relation.service nebula-conversation.service nebula-message.service nebula-gateway.service nebula-device.service nebula-push.service nebula-admin.service
 After=network-online.target docker.service
 
 [Install]

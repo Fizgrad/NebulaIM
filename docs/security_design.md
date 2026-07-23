@@ -26,7 +26,7 @@ internal_rpc.auth.token=<raw-token-used-by-internal-clients>
 internal_rpc.auth.token_sha256=<sha256-of-raw-token>
 ```
 
-When enabled, Gateway injects `x-nebula-internal-token` for UserService/MessageService calls, PushService injects it for GatewayService calls, and UserService/RelationService/ConversationService/MessageService/PushService/GatewayService reject missing or invalid metadata. This complements loopback binding, firewall rules, and optional gRPC TLS/mTLS.
+When enabled, Gateway injects `x-nebula-internal-token` for UserService/MessageService calls, PushService and DeviceService inject it for GatewayService calls, and UserService/RelationService/ConversationService/MessageService/DeviceService/PushService/GatewayService reject missing or invalid metadata. This complements loopback binding, firewall rules, and optional gRPC TLS/mTLS.
 
 Trace IDs are propagated through gRPC metadata key `x-nebula-trace-id`. Spans can be exported to Jaeger through OTLP/HTTP. Trace IDs are intentionally not Prometheus labels to avoid high-cardinality metrics.
 

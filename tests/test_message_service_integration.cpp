@@ -1,6 +1,8 @@
+#include "TestDeps.h"
 #include "MessageServiceContext.h"
 #include "MessageServiceImpl.h"
 #include "common/auth/PasswordHasher.h"
+#include "common/dao/RelationDao.h"
 #include "common/utils/TimeUtil.h"
 
 #include <cassert>
@@ -23,11 +25,12 @@ uint64_t createUser(nebula::UserDao* dao, const std::string& prefix) {
 
 int main() {
     nebula::MessageServiceContext context;
-    assert(context.init("config/nebula.conf"));
-    nebula::MessageServiceImpl service(context.userDao(), context.groupDao(), context.messageDao(), context.offlineMessageDao(), context.redisClient(), context.kafkaProducer(), context.messageIdGenerator(), context.messageDeduplicator(), context.options());
+    if (!context.init("config/nebula.conf")) return nebula::tests::skip("test_message_service_integration", "MessageService dependencies are not reachable");
+    nebula::MessageServiceImpl service(context.userDao(), context.groupDao(), context.relationDao(), context.messageDao(), context.offlineMessageDao(), context.redisClient(), context.kafkaProducer(), context.messageIdGenerator(), context.messageDeduplicator(), context.options(), context.mysqlPool(), context.conversationDao(), context.messageReceiptDao(), context.outboxDao());
     grpc::ServerContext server_context;
     uint64_t u1 = createUser(context.userDao(), "msi_u1_");
     uint64_t u2 = createUser(context.userDao(), "msi_u2_");
+    assert(context.relationDao()->addFriendBidirectional(u1, u2));
 
     nebula::proto::SendSingleMessageRequest req;
     req.set_request_id("integration-single");

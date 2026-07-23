@@ -49,6 +49,7 @@ bool UserServiceContext::init(const std::string& config_path) {
     password_min_length_ = config_.getInt("auth.password_min_length", 6);
 
     user_dao_ = std::make_unique<UserDao>(mysql_pool_);
+    device_dao_ = std::make_unique<DeviceDao>(mysql_pool_);
     redis_client_ = std::move(redis);
     token_manager_ = std::make_unique<TokenManager>(config_.getInt("auth.token_ttl_seconds", 7 * 24 * 3600));
     return true;
@@ -56,6 +57,10 @@ bool UserServiceContext::init(const std::string& config_path) {
 
 UserDao* UserServiceContext::userDao() {
     return user_dao_.get();
+}
+
+DeviceDao* UserServiceContext::deviceDao() {
+    return device_dao_.get();
 }
 
 RedisClient* UserServiceContext::redisClient() {

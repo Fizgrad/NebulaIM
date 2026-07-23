@@ -2,7 +2,7 @@
 
 ## Why NebulaIM needs RPC
 
-NebulaIM gateway handles long-lived client TCP/WebSocket connections, while user, message, relation, push, and gateway management capabilities are split into backend services. RPC gives these services typed, versioned, and efficient service-to-service communication.
+NebulaIM gateway handles long-lived client TCP/WebSocket connections, while user, device, message, relation, push, and gateway management capabilities are split into backend services. RPC gives these services typed, versioned, and efficient service-to-service communication.
 
 ## gRPC and Protobuf roles
 
@@ -20,10 +20,11 @@ gateway
   +--> message_service      : Send/Ack/PullOffline/Read/Recall
   +--> relation_service     : Friend requests, friendships, groups
   +--> conversation_service : Conversation list and conversation flags
+  +--> device_service       : Device list and revocation
 
 push_service
   | gRPC
-  +--> gateway           : DeliverToConnection/KickUser/GetOnlineStatus
+  +--> gateway           : DeliverToConnection/KickUser/KickConnection/GetOnlineStatus
 
 admin clients
   | gRPC metadata x-nebula-admin-token

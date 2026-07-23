@@ -39,7 +39,12 @@ bool PushServiceContext::init(const std::string& config_path) {
     kafka_consumer_config_.brokers = config_.getString("kafka.brokers", kafka_consumer_config_.brokers);
     kafka_consumer_config_.group_id = config_.getString("kafka.consumer.group_id", "nebula-push-service");
     kafka_consumer_config_.client_id = config_.getString("kafka.consumer.client_id", "nebula-push-consumer");
+    kafka_consumer_config_.auto_offset_reset = config_.getString("kafka.consumer.auto_offset_reset", kafka_consumer_config_.auto_offset_reset);
     kafka_consumer_config_.enable_auto_commit = config_.getBool("kafka.consumer.enable_auto_commit", kafka_consumer_config_.enable_auto_commit);
+    kafka_consumer_config_.session_timeout_ms = config_.getInt("kafka.consumer.session_timeout_ms", kafka_consumer_config_.session_timeout_ms);
+    kafka_consumer_config_.heartbeat_interval_ms = config_.getInt("kafka.consumer.heartbeat_interval_ms", kafka_consumer_config_.heartbeat_interval_ms);
+    kafka_consumer_config_.max_poll_interval_ms = config_.getInt("kafka.consumer.max_poll_interval_ms", kafka_consumer_config_.max_poll_interval_ms);
+    kafka_consumer_config_.fetch_wait_max_ms = config_.getInt("kafka.consumer.fetch_wait_max_ms", kafka_consumer_config_.fetch_wait_max_ms);
 
     options_.worker_num = config_.getInt("push_service.worker_num", 1);
     options_.poll_timeout_ms = config_.getInt("push_service.poll_timeout_ms", 1000);

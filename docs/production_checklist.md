@@ -2,7 +2,7 @@
 
 ## Config
 
-Check ports, service addresses, worker counts, heartbeat timeout, Redis TTLs, token TTLs, rate limits, circuit breaker thresholds, outbox retry settings, Kafka consumer commit mode, Gateway RPC max queue size, and recall window.
+Check ports, service addresses, worker counts, heartbeat timeout, Redis TTLs, token TTLs, rate limits, circuit breaker thresholds, outbox retry settings, Kafka consumer commit/offset/session/heartbeat/fetch-wait settings, Gateway RPC max queue size, and recall window.
 
 Run `./scripts/validate_prod_config.sh /etc/nebulaim/nebula.conf` before starting systemd services on a production host.
 
@@ -16,11 +16,11 @@ For direct Gateway TLS, set `gateway.tls.enabled=true`, `gateway.tls.cert_path`,
 
 For tracing, decide whether `trace.enabled=true` should be used on this host and verify Jaeger/OTLP is reachable at `trace.otlp_endpoint`.
 
-Review `admin.cleanup.*` retention windows and `admin.cleanup.batch_size`. `RunCleanup` deletes published outbox rows, delivered offline rows, handled friend requests, old message receipts, and stale Redis online device members in bounded batches.
+Review `admin.cleanup.*` retention windows and `admin.cleanup.batch_size`. `RunCleanup` deletes published outbox rows, acked offline rows, handled friend requests, old message receipts, and stale Redis online device members in bounded batches.
 
 ## MySQL
 
-Run `NEBULA_ENV=production ./scripts/migrate_db.sh`, verify `schema_migrations`, indexes, connection pool size, binlog/backup policy, slow query logging, and disk capacity. The migration script acquires a MySQL named lock and creates a pre-migration backup in production mode. Production initialization must not seed test users.
+Run `NEBULA_ENV=production ./scripts/migrate_db.sh /etc/nebulaim/nebula.conf`, verify `schema_migrations`, indexes, connection pool size, binlog/backup policy, slow query logging, and disk capacity. The migration script acquires a MySQL named lock and creates a pre-migration backup in production mode. Production initialization must not seed test users.
 
 Enable `scripts/backup_mysql.sh` via cron or a systemd timer and verify restore with `scripts/restore_mysql.sh` in a non-production environment.
 
@@ -30,7 +30,7 @@ Verify auth, persistence policy, eviction policy, online TTL keys, hashed token 
 
 ## Kafka
 
-Run `./scripts/init_topics.sh`, verify single/group/offline/retry/DLQ topics, partition count, retention, consumer group lag, broker health, and `kafka.consumer.enable_auto_commit=false` for PushService.
+Run `./scripts/init_topics.sh`, verify single/group/offline/retry/DLQ topics, partition count, retention, consumer group lag, broker health, `kafka.consumer.enable_auto_commit=false`, `kafka.consumer.auto_offset_reset=earliest`, and the interactive defaults `session_timeout_ms=6000`, `heartbeat_interval_ms=2000`, `fetch_wait_max_ms=50` for PushService.
 
 ## Gateway
 
@@ -42,7 +42,7 @@ Terminate public TCP/WebSocket TLS at the edge or enable native Gateway TLS. Rev
 
 ## Monitoring
 
-Check Prometheus scrape targets, Grafana dashboards, Jaeger UI, OTLP endpoint, service metrics endpoints, AdminService `HealthCheck`, `GetSystemStats`, `GetOutboxStats`, `GetKafkaLagInfo`, `GetServiceOverview`, `ValidateConfig`, and alert thresholds.
+Check Prometheus scrape targets, Grafana dashboards, Jaeger UI, OTLP endpoint, service metrics endpoints including DeviceService, AdminService `HealthCheck`, `GetSystemStats`, `GetOutboxStats`, `GetKafkaLagInfo`, `GetServiceOverview`, `ValidateConfig`, and alert thresholds.
 
 ## Logs
 

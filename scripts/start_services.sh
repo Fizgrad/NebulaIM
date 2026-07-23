@@ -41,5 +41,6 @@ start_one relation_service relation_service/nebula_relation_service 50053 relati
 start_one conversation_service conversation_service/nebula_conversation_service 50056 conversation
 start_one message_service message_service/nebula_message_service 50052 message
 start_one gateway gateway/nebula_gateway "9000/50055" gateway
+start_one device_service device_service/nebula_device_service 50058 device
 start_one push_service push_service/nebula_push_service 50054 push
 start_one admin_service admin_service/nebula_admin_service 50057 admin

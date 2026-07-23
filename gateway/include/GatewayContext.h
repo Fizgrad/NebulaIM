@@ -8,6 +8,7 @@
 #include "common/gateway/GatewayOnlineManager.h"
 #include "common/gateway/GatewayRouter.h"
 #include "common/protocol/PacketCodec.h"
+#include "common/ratelimit/RateLimiter.h"
 #include "common/redis/RedisClient.h"
 #include "common/rpc/GrpcTlsCredentials.h"
 #include "common/tls/TlsConfig.h"
@@ -29,6 +30,7 @@ struct GatewayOptions {
     int rpc_port = 50055;
     int heartbeat_timeout_ms = 30000;
     int online_ttl_seconds = 60;
+    RateLimitConfig rate_limit;
     TlsConfig tcp_tls;
     std::string user_service_addr = "127.0.0.1:50051";
     std::string message_service_addr = "127.0.0.1:50052";

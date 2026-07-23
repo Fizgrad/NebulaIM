@@ -11,6 +11,7 @@ public:
 
     std::string generateToken(uint64_t user_id);
     std::string tokenKey(const std::string& token) const;
+    static std::string tokenHash(const std::string& token);
     int ttlSeconds() const;
     int64_t expireAtMs() const;
 

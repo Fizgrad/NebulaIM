@@ -1,3 +1,4 @@
+#include "TestDeps.h"
 #include "PushServiceContext.h"
 #include "common/utils/TimeUtil.h"
 
@@ -5,7 +6,7 @@
 
 int main() {
     nebula::PushServiceContext context;
-    assert(context.init("config/nebula.conf"));
+    if (!context.init("config/nebula.conf")) return nebula::tests::skip("test_push_dispatcher", "PushService dependencies are not reachable");
     nebula::proto::MessageData message;
     message.set_message_id(static_cast<uint64_t>(nebula::TimeUtil::nowMs()));
     message.set_conversation_id(1);

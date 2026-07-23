@@ -60,6 +60,30 @@ bool GatewayClient::kickUser(const std::string& request_id, uint64_t user_id, co
     return ok;
 }
 
+bool GatewayClient::kickConnection(const std::string& request_id,
+                                   uint64_t user_id,
+                                   const std::string& connection_id,
+                                   const std::string& device_id,
+                                   const std::string& reason) {
+    if (!stub_) return false;
+    if (!breaker_.allowRequest()) return false;
+    proto::KickConnectionRequest req;
+    req.set_request_id(request_id);
+    req.set_user_id(user_id);
+    req.set_connection_id(connection_id);
+    req.set_device_id(device_id);
+    req.set_reason(reason);
+    proto::KickConnectionResponse resp;
+    grpc::ClientContext ctx;
+    RpcMetadata::injectTraceId(&ctx, TraceContext::ensureTraceId(request_id));
+    InternalRpcAuth::instance().inject(&ctx);
+    grpc::Status status = stub_->KickConnection(&ctx, req, &resp);
+    bool ok = status.ok() && resp.response().code() == 0;
+    if (ok) breaker_.recordSuccess();
+    else breaker_.recordFailure();
+    return ok;
+}
+
 bool GatewayClient::getOnlineStatus(const std::string& request_id, uint64_t user_id, bool* online, std::string* gateway_id, std::string* connection_id) {
     if (!stub_) return false;
     if (!breaker_.allowRequest()) return false;

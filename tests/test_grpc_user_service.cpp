@@ -12,7 +12,7 @@ int main() {
         std::cout << "test_grpc_user_service skipped: MySQL/Redis dependencies are not reachable\n";
         return 0;
     }
-    nebula::UserServiceImpl service(context.userDao(), context.redisClient(), context.tokenManager(), context.passwordMinLength());
+    nebula::UserServiceImpl service(context.userDao(), context.deviceDao(), context.redisClient(), context.tokenManager(), context.passwordMinLength());
     grpc::ServerContext server_context;
 
     std::string username = "grpc_user_" + std::to_string(nebula::TimeUtil::nowMs());
@@ -29,6 +29,9 @@ int main() {
     request.set_request_id("test-login");
     request.set_username(username);
     request.set_password("password123");
+    request.set_device_id("grpc-device");
+    request.set_platform("test");
+    request.set_device_name("grpc-device");
 
     nebula::proto::LoginResponse response;
     grpc::Status status = service.Login(&server_context, &request, &response);

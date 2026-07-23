@@ -2,6 +2,7 @@
 #include "GatewayServer.h"
 #include "GatewayServiceImpl.h"
 
+#include "common/app/ShutdownSignal.h"
 #include "common/log/Logger.h"
 #include "common/monitor/MetricsRegistry.h"
 #include "common/monitor/MetricsRuntime.h"
@@ -41,7 +42,16 @@ int main(int argc, char* argv[]) {
     nebula::GatewayOptions options = context.options();
     nebula::EventLoop loop;
     nebula::InetAddress listen_addr(static_cast<uint16_t>(options.tcp_port), options.tcp_host);
-    nebula::GatewayServer tcp_server(&loop, listen_addr, options.gateway_id, context.connectionManager(), context.onlineManager(), context.router(), options.tcp_worker_threads, options.heartbeat_timeout_ms, context.tcpTlsContext());
+    nebula::GatewayServer tcp_server(&loop,
+                                     listen_addr,
+                                     options.gateway_id,
+                                     context.connectionManager(),
+                                     context.onlineManager(),
+                                     context.router(),
+                                     options.tcp_worker_threads,
+                                     options.heartbeat_timeout_ms,
+                                     context.tcpTlsContext(),
+                                     options.rate_limit);
     tcp_server.start();
     loop.runEvery(5000, [&context]() {
         auto* executor = context.rpcExecutor();
@@ -70,6 +80,10 @@ int main(int argc, char* argv[]) {
     LOG_INFO(std::string("Gateway TCP listening on ") + options.tcp_host + ":" + std::to_string(options.tcp_port) +
              (options.tcp_tls.enabled ? " with native TLS" : " without native TLS"));
     LOG_INFO("Gateway RPC listening on " + context.rpcListenAddress());
+    nebula::ShutdownSignalWatcher shutdown([&loop, &rpc_server]() {
+        if (rpc_server) rpc_server->Shutdown();
+        loop.quit();
+    });
     loop.loop();
     rpc_server->Shutdown();
     rpc_thread.join();

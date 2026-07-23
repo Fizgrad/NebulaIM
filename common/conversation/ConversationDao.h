@@ -65,6 +65,7 @@ public:
                                            const std::string& preview,
                                            int64_t now_ms);
     std::vector<Conversation> listConversations(uint64_t owner_user_id, size_t limit, size_t offset);
+    bool isOwner(uint64_t owner_user_id, uint64_t conversation_id);
     bool markRead(uint64_t owner_user_id, uint64_t conversation_id);
     bool deleteConversation(uint64_t owner_user_id, uint64_t conversation_id);
     bool pinConversation(uint64_t owner_user_id, uint64_t conversation_id, bool pinned);

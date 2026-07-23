@@ -6,6 +6,13 @@
 
 namespace nebula {
 
+namespace {
+size_t getPositiveSize(const Config& config, const std::string& key, size_t default_value) {
+    int value = config.getInt(key, static_cast<int>(default_value));
+    return value > 0 ? static_cast<size_t>(value) : default_value;
+}
+}
+
 GatewayContext::GatewayContext() = default;
 GatewayContext::~GatewayContext() = default;
 
@@ -22,6 +29,11 @@ bool GatewayContext::init(const std::string& config_path) {
     options_.rpc_port = config_.getInt("gateway.rpc.port", options_.rpc_port);
     options_.heartbeat_timeout_ms = config_.getInt("gateway.heartbeat_timeout_ms", options_.heartbeat_timeout_ms);
     options_.online_ttl_seconds = config_.getInt("gateway.online_ttl_seconds", options_.online_ttl_seconds);
+    options_.rate_limit.enabled = config_.getBool("rate_limit.enabled", options_.rate_limit.enabled);
+    options_.rate_limit.login_per_minute = getPositiveSize(config_, "rate_limit.login_per_minute", options_.rate_limit.login_per_minute);
+    options_.rate_limit.message_per_second = getPositiveSize(config_, "rate_limit.message_per_second", options_.rate_limit.message_per_second);
+    options_.rate_limit.connection_packet_per_second =
+        getPositiveSize(config_, "rate_limit.connection_packet_per_second", options_.rate_limit.connection_packet_per_second);
     options_.tcp_tls = TlsConfigLoader::fromConfig(config_, "gateway.tls.");
     options_.user_service_addr = config_.getString("user_service.addr", options_.user_service_addr);
     options_.message_service_addr = config_.getString("message_service.addr", options_.message_service_addr);
@@ -58,7 +70,13 @@ bool GatewayContext::init(const std::string& config_path) {
     rpc_executor_ = std::make_unique<RpcExecutor>(static_cast<size_t>(options_.rpc_worker_threads),
                                                   static_cast<size_t>(options_.rpc_max_queue_size));
     rpc_executor_->start();
-    router_ = std::make_unique<GatewayRouter>(connection_manager_.get(), online_manager_.get(), backend_clients_.get(), codec_.get(), nullptr, rpc_executor_.get());
+    router_ = std::make_unique<GatewayRouter>(connection_manager_.get(),
+                                              online_manager_.get(),
+                                              backend_clients_.get(),
+                                              codec_.get(),
+                                              nullptr,
+                                              rpc_executor_.get(),
+                                              options_.rate_limit);
     return true;
 }
 

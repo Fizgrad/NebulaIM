@@ -34,12 +34,13 @@ bool AdminServiceContext::init(const std::string& config_path) {
         {"user-service", config_.getString("user_service.host", "127.0.0.1") + ":" + std::to_string(config_.getInt("user_service.port", 50051))},
         {"relation-service", config_.getString("relation_service.host", "127.0.0.1") + ":" + std::to_string(config_.getInt("relation_service.port", 50053))},
         {"conversation-service", config_.getString("conversation_service.host", "127.0.0.1") + ":" + std::to_string(config_.getInt("conversation_service.port", 50056))},
+        {"device-service", config_.getString("device_service.host", "127.0.0.1") + ":" + std::to_string(config_.getInt("device_service.port", 50058))},
         {"message-service", config_.getString("message_service.host", "127.0.0.1") + ":" + std::to_string(config_.getInt("message_service.port", 50052))},
         {"push-service", config_.getString("push_service.host", "127.0.0.1") + ":" + std::to_string(config_.getInt("push_service.port", 50054))},
         {"admin-service", host + ":" + std::to_string(port)},
     };
     cleanup_options_.outbox_published_retention_ms = config_.getInt64("admin.cleanup.outbox_published_retention_ms", cleanup_options_.outbox_published_retention_ms);
-    cleanup_options_.offline_delivered_retention_ms = config_.getInt64("admin.cleanup.offline_delivered_retention_ms", cleanup_options_.offline_delivered_retention_ms);
+    cleanup_options_.offline_acked_retention_ms = config_.getInt64("admin.cleanup.offline_acked_retention_ms", cleanup_options_.offline_acked_retention_ms);
     cleanup_options_.friend_request_retention_ms = config_.getInt64("admin.cleanup.friend_request_retention_ms", cleanup_options_.friend_request_retention_ms);
     cleanup_options_.message_receipt_retention_ms = config_.getInt64("admin.cleanup.message_receipt_retention_ms", cleanup_options_.message_receipt_retention_ms);
     cleanup_options_.cleanup_batch_size = config_.getInt("admin.cleanup.batch_size", cleanup_options_.cleanup_batch_size);
@@ -69,7 +70,12 @@ bool AdminServiceContext::init(const std::string& config_path) {
     kafka_consumer_config_.brokers = config_.getString("kafka.brokers", kafka_consumer_config_.brokers);
     kafka_consumer_config_.group_id = config_.getString("kafka.consumer.group_id", kafka_consumer_config_.group_id);
     kafka_consumer_config_.client_id = config_.getString("kafka.consumer.client_id", kafka_consumer_config_.client_id);
+    kafka_consumer_config_.auto_offset_reset = config_.getString("kafka.consumer.auto_offset_reset", kafka_consumer_config_.auto_offset_reset);
     kafka_consumer_config_.enable_auto_commit = false;
+    kafka_consumer_config_.session_timeout_ms = config_.getInt("kafka.consumer.session_timeout_ms", kafka_consumer_config_.session_timeout_ms);
+    kafka_consumer_config_.heartbeat_interval_ms = config_.getInt("kafka.consumer.heartbeat_interval_ms", kafka_consumer_config_.heartbeat_interval_ms);
+    kafka_consumer_config_.max_poll_interval_ms = config_.getInt("kafka.consumer.max_poll_interval_ms", kafka_consumer_config_.max_poll_interval_ms);
+    kafka_consumer_config_.fetch_wait_max_ms = config_.getInt("kafka.consumer.fetch_wait_max_ms", kafka_consumer_config_.fetch_wait_max_ms);
     kafka_topics_ = {
         config_.getString("kafka.topic.single", "nebula.message.single"),
         config_.getString("kafka.topic.group", "nebula.message.group"),

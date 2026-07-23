@@ -1,3 +1,4 @@
+#include "TestDeps.h"
 #include "common/config/Config.h"
 #include "common/dao/MessageDao.h"
 #include "common/db/MySqlConnectionPool.h"
@@ -6,18 +7,9 @@
 #include <cassert>
 
 int main() {
-    nebula::Config config;
-    assert(config.loadFromFile("config/nebula.conf"));
-
-    nebula::MySqlConfig mysql;
-    mysql.host = config.getString("mysql.host", mysql.host);
-    mysql.port = config.getInt("mysql.port", mysql.port);
-    mysql.user = config.getString("mysql.user", mysql.user);
-    mysql.password = config.getString("mysql.password", mysql.password);
-    mysql.database = config.getString("mysql.database", mysql.database);
-
     nebula::MySqlConnectionPool pool;
-    assert(pool.init(mysql, 2));
+    std::string reason;
+    if (!nebula::tests::initMySqlPool(&pool, 2, &reason)) return nebula::tests::skip("test_message_dao", reason);
 
     int64_t now = nebula::TimeUtil::nowMs();
     nebula::MessageRecord msg;

@@ -7,6 +7,7 @@ import "common.proto";
 service GatewayService {
   rpc DeliverToConnection(DeliverToConnectionRequest) returns (DeliverToConnectionResponse);
   rpc KickUser(KickUserRequest) returns (KickUserResponse);
+  rpc KickConnection(KickConnectionRequest) returns (KickConnectionResponse);
   rpc GetOnlineStatus(GetOnlineStatusRequest) returns (GetOnlineStatusResponse);
 }
 
@@ -28,6 +29,18 @@ message KickUserRequest {
 }
 
 message KickUserResponse {
+  CommonResponse response = 1;
+}
+
+message KickConnectionRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  string connection_id = 3;
+  string device_id = 4;
+  string reason = 5;
+}
+
+message KickConnectionResponse {
   CommonResponse response = 1;
 }
 

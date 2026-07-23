@@ -34,7 +34,7 @@ bool MySqlConnection::connect(const MySqlConfig& config) {
                                       config.database.c_str(),
                                       static_cast<unsigned int>(config.port),
                                       nullptr,
-                                      CLIENT_MULTI_STATEMENTS);
+                                      0);
     if (result == nullptr) {
         last_error_ = mysql_error(mysql);
         LOG_ERROR("MySQL connect failed: " + last_error_);

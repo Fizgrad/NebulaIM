@@ -2,7 +2,7 @@
 
 ## Current Capability
 
-UserService is the auth/profile service backed by MySQL and Redis. It supports Register, Login, ValidateToken, GetUserInfo, GetUserByUsername, Logout, and RefreshToken.
+UserService is the auth/profile service backed by MySQL and Redis. It supports Register, Login, ValidateToken, GetUserInfo, GetUserByUsername, Logout, RefreshToken, and login-time device metadata persistence.
 
 ## Flow summary
 
@@ -15,7 +15,7 @@ validate input -> check username -> PBKDF2 hash password -> UserDao create user 
 Login:
 
 ```text
-load user by username -> verify password -> generate random token -> Redis SETEX -> optionally record device metadata -> return token
+load user by username -> verify password -> generate random token -> Redis SETEX -> record device metadata when device_id is present -> return token
 ```
 
 ValidateToken:
@@ -90,7 +90,7 @@ auth.password_min_length=6
 
 `test_user_service_impl` and `test_user_service_integration` require MySQL and Redis.
 
-LoginRequest also accepts `device_id`, `platform`, and `device_name`; Gateway uses these fields for multi-device online state.
+LoginRequest also accepts `device_id`, `platform`, and `device_name`. When `device_id` is present, UserService writes `user_devices.token_hash=SHA-256(token)` so DeviceService can revoke the token without storing the raw token.
 
 ## Interview points
 

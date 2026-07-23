@@ -10,7 +10,8 @@ NebulaIM backend is a C++17/Linux distributed IM stack with native TCP and WebSo
 | WebSocket Gateway | Browser WebSocket binary frames carry the same PacketCodec payloads |
 | Gateway RPC | Backend calls run through a bounded `RpcExecutor` to keep EventLoop threads non-blocking |
 | User auth | Register, login, validate token, logout, refresh token, and user profile lookup |
-| Friend relationship | Friend request send/list/accept/reject flow; direct AddFriend requires an approved request |
+| Device management | List devices and kick one/all devices through token revocation, Redis cleanup, and Gateway connection close |
+| Friend relationship | Friend request send/list/accept/reject flow; direct AddFriend is disabled and returns `FRIEND_REQUEST_REQUIRED` |
 | Groups | Create, join, leave, member list, and group message delivery |
 | Message send | Single and group messages persist through MySQL, conversation updates, and outbox insertion in one transaction |
 | Kafka reliability | OutboxWorker retry/dead status and PushService manual offset commit |

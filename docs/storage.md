@@ -39,11 +39,11 @@ Kafka decouples message send, fanout, offline handling, retry, and DLQ processin
 - `messages.idx_to_user_time`: query received single-chat messages.
 - `messages.idx_group_time`: query group messages.
 - `offline_messages.uk_user_message`: dedup offline message per user.
-- `offline_messages.idx_user_status_time`: pull undelivered offline messages by user in time order.
+- `offline_messages.idx_user_status_time`: pull `Pending` and `Pulled` offline messages by user in time order; cleanup deletes only `Acked` rows.
 - `friend_requests.uk_from_to_status`: dedup pending friend requests.
 - `conversations.uk_owner_conversation`: one conversation view per owner user.
 - `outbox_events.idx_status_retry_time`: scan publishable outbox events.
-- `user_devices.uk_user_device`: dedup device records per user.
+- `user_devices.uk_user_device`: dedup device records per user; `token_hash` stores only the SHA-256 token hash for revocation.
 - `message_receipts.uk_message_user`: dedup delivered/read receipt per message and user.
 
 ## Redis keys
@@ -55,7 +55,7 @@ nebula:user:online:{user_id}:{device_id} -> gateway_id, TTL heartbeat window
 nebula:user:conn:{user_id}:{device_id} -> connection_id, TTL heartbeat window
 nebula:rate_limit:user:{user_id} -> counter, TTL one window
 nebula:session:recent:{user_id} -> sorted/recent sessions, TTL days
-nebula:msg:dedup:{message_id} -> exists, TTL dedup window
+nebula:msg:dedup:{user_id}:{client_sequence_id} -> message_id, TTL dedup window
 ```
 
 `nebula:user:devices:{user_id}` is authoritative only as a membership set. Readers verify both per-device keys before treating a device as online, prune stale members on PushService reads, and AdminService cleanup can batch-prune stale device members.
@@ -72,7 +72,7 @@ nebula.message.retry
 nebula.message.dlq
 ```
 
-Use `conversation_id` as key where possible so messages for the same conversation tend to land in the same partition. PushService disables Kafka auto commit and commits offsets only after a message is delivered, stored offline, retried, or sent to DLQ successfully. Consumers must still be idempotent because Kafka can redeliver messages after crashes or retries.
+Use `conversation_id` as key where possible so messages for the same conversation tend to land in the same partition. PushService disables Kafka auto commit and commits offsets only after a message is delivered, stored offline, retried, or sent to DLQ successfully. Offset reset, session, heartbeat, and fetch-wait settings are explicit in config to keep startup, restart, and delivery behavior predictable. Consumers must still be idempotent because Kafka can redeliver messages after crashes or retries.
 
 ## DAO layer
 

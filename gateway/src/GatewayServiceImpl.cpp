@@ -73,6 +73,36 @@ grpc::Status GatewayServiceImpl::KickUser(grpc::ServerContext* context, const pr
     return grpc::Status::OK;
 }
 
+grpc::Status GatewayServiceImpl::KickConnection(grpc::ServerContext* context, const proto::KickConnectionRequest* request, proto::KickConnectionResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
+    if (connection_manager_ == nullptr || request->user_id() == 0 || request->connection_id().empty()) {
+        fill(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT);
+        return grpc::Status::OK;
+    }
+    auto ctx = connection_manager_->getContext(request->connection_id());
+    if (!ctx.has_value() || ctx->user_id != request->user_id()) {
+        fill(response->mutable_response(), request->request_id(), ErrorCode::GATEWAY_CONNECTION_NOT_FOUND);
+        return grpc::Status::OK;
+    }
+    if (!request->device_id().empty() && ctx->device_id != request->device_id()) {
+        fill(response->mutable_response(), request->request_id(), ErrorCode::GATEWAY_CONNECTION_NOT_FOUND, "connection device mismatch");
+        return grpc::Status::OK;
+    }
+    auto conn = connection_manager_->getConnection(request->connection_id());
+    if (!conn || !conn->connected()) {
+        fill(response->mutable_response(), request->request_id(), ErrorCode::GATEWAY_CONNECTION_NOT_FOUND);
+        return grpc::Status::OK;
+    }
+    LOG_INFO("gateway kick connection request_id=" + request->request_id() +
+             " user_id=" + std::to_string(request->user_id()) +
+             " device_id=" + request->device_id() +
+             " connection_id=" + request->connection_id() +
+             " reason=" + request->reason());
+    conn->forceClose();
+    fill(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
+    return grpc::Status::OK;
+}
+
 grpc::Status GatewayServiceImpl::GetOnlineStatus(grpc::ServerContext* context, const proto::GetOnlineStatusRequest* request, proto::GetOnlineStatusResponse* response) {
     if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     std::vector<ConnectionContext> contexts = connection_manager_ ? connection_manager_->getContextsByUserId(request->user_id()) : std::vector<ConnectionContext>{};

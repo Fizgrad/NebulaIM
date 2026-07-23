@@ -13,9 +13,9 @@ Browser -> WebSocket binary frame -> PacketCodec -> Gateway
                                                      |
                                                      | bounded gRPC/RpcExecutor
                                                      v
-       +-------------+  +----------------+  +----------------------+  +-------------+
-       | UserService |  | RelationService|  | ConversationService  |  | MessageSvc  |
-       +-------------+  +----------------+  +----------------------+  +-------------+
+       +-------------+  +----------------+  +----------------------+  +-------------+  +-------------+
+       | UserService |  | RelationService|  | ConversationService  |  | MessageSvc  |  | DeviceSvc   |
+       +-------------+  +----------------+  +----------------------+  +-------------+  +-------------+
               |                 |                    |                       |
               +-----------------+--------------------+-----------------------+
                                       MySQL / Redis
@@ -52,8 +52,14 @@ AdminService provides token-protected health, cleanup, online stats, outbox stat
 - Register users.
 - Login users with password hashing.
 - Generate, validate, refresh, and delete tokens.
-- Persist/update device metadata.
+- Persist/update device metadata with hashed token values.
 - Query user profiles.
+
+### DeviceService
+
+- List a user's known devices.
+- Resolve online state from Redis multi-device keys.
+- Kick one device or all devices by clearing token hash, Redis online keys, device-set membership, and the Gateway connection.
 
 ### RelationService
 
@@ -74,7 +80,7 @@ AdminService provides token-protected health, cleanup, online stats, outbox stat
 - Deduplicate client retries.
 - Persist messages and update conversations.
 - Insert outbox events in the same transaction as message send.
-- Mark delivered/read states.
+- Mark delivered, ACK, and read states.
 - Recall messages with permission and time-window checks, committing recall state and recall event together.
 
 ### PushService

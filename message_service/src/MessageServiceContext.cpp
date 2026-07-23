@@ -70,6 +70,7 @@ bool MessageServiceContext::init(const std::string& config_path) {
 
     user_dao_ = std::make_unique<UserDao>(mysql_pool_);
     group_dao_ = std::make_unique<GroupDao>(mysql_pool_);
+    relation_dao_ = std::make_unique<RelationDao>(mysql_pool_);
     message_dao_ = std::make_unique<MessageDao>(mysql_pool_);
     offline_message_dao_ = std::make_unique<OfflineMessageDao>(mysql_pool_);
     conversation_dao_ = std::make_unique<ConversationDao>(mysql_pool_);
@@ -95,6 +96,7 @@ bool MessageServiceContext::init(const std::string& config_path) {
 
 UserDao* MessageServiceContext::userDao() { return user_dao_.get(); }
 GroupDao* MessageServiceContext::groupDao() { return group_dao_.get(); }
+RelationDao* MessageServiceContext::relationDao() { return relation_dao_.get(); }
 MessageDao* MessageServiceContext::messageDao() { return message_dao_.get(); }
 OfflineMessageDao* MessageServiceContext::offlineMessageDao() { return offline_message_dao_.get(); }
 ConversationDao* MessageServiceContext::conversationDao() { return conversation_dao_.get(); }

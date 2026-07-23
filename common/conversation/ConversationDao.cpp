@@ -120,38 +120,59 @@ std::vector<Conversation> ConversationDao::listConversations(uint64_t owner_user
     return conversations;
 }
 
+bool ConversationDao::isOwner(uint64_t owner_user_id, uint64_t conversation_id) {
+    auto conn = pool_.acquire();
+    if (!conn) return false;
+    auto result = conn->executeQuery("SELECT id FROM conversations WHERE owner_user_id=" + std::to_string(owner_user_id) +
+                                     " AND conversation_id=" + std::to_string(conversation_id) +
+                                     " AND deleted=0 LIMIT 1");
+    return result && result->next();
+}
+
 bool ConversationDao::markRead(uint64_t owner_user_id, uint64_t conversation_id) {
     auto conn = pool_.acquire();
     if (!conn) return false;
-    return conn->executeUpdate("UPDATE conversations SET unread_count=0, updated_at=" + std::to_string(TimeUtil::nowMs()) +
-                               " WHERE owner_user_id=" + std::to_string(owner_user_id) +
-                               " AND conversation_id=" + std::to_string(conversation_id));
+    if (!conn->executeUpdate("UPDATE conversations SET unread_count=0, updated_at=" + std::to_string(TimeUtil::nowMs()) +
+                             " WHERE owner_user_id=" + std::to_string(owner_user_id) +
+                             " AND conversation_id=" + std::to_string(conversation_id))) {
+        return false;
+    }
+    return conn->affectedRows() > 0;
 }
 
 bool ConversationDao::deleteConversation(uint64_t owner_user_id, uint64_t conversation_id) {
     auto conn = pool_.acquire();
     if (!conn) return false;
-    return conn->executeUpdate("UPDATE conversations SET deleted=1, updated_at=" + std::to_string(TimeUtil::nowMs()) +
-                               " WHERE owner_user_id=" + std::to_string(owner_user_id) +
-                               " AND conversation_id=" + std::to_string(conversation_id));
+    if (!conn->executeUpdate("UPDATE conversations SET deleted=1, updated_at=" + std::to_string(TimeUtil::nowMs()) +
+                             " WHERE owner_user_id=" + std::to_string(owner_user_id) +
+                             " AND conversation_id=" + std::to_string(conversation_id))) {
+        return false;
+    }
+    return conn->affectedRows() > 0;
 }
 
 bool ConversationDao::pinConversation(uint64_t owner_user_id, uint64_t conversation_id, bool pinned) {
     auto conn = pool_.acquire();
     if (!conn) return false;
-    return conn->executeUpdate("UPDATE conversations SET pinned=" + std::to_string(pinned ? 1 : 0) +
-                               ", updated_at=" + std::to_string(TimeUtil::nowMs()) +
-                               " WHERE owner_user_id=" + std::to_string(owner_user_id) +
-                               " AND conversation_id=" + std::to_string(conversation_id));
+    if (!conn->executeUpdate("UPDATE conversations SET pinned=" + std::to_string(pinned ? 1 : 0) +
+                             ", updated_at=" + std::to_string(TimeUtil::nowMs()) +
+                             " WHERE owner_user_id=" + std::to_string(owner_user_id) +
+                             " AND conversation_id=" + std::to_string(conversation_id))) {
+        return false;
+    }
+    return conn->affectedRows() > 0;
 }
 
 bool ConversationDao::muteConversation(uint64_t owner_user_id, uint64_t conversation_id, bool muted) {
     auto conn = pool_.acquire();
     if (!conn) return false;
-    return conn->executeUpdate("UPDATE conversations SET muted=" + std::to_string(muted ? 1 : 0) +
-                               ", updated_at=" + std::to_string(TimeUtil::nowMs()) +
-                               " WHERE owner_user_id=" + std::to_string(owner_user_id) +
-                               " AND conversation_id=" + std::to_string(conversation_id));
+    if (!conn->executeUpdate("UPDATE conversations SET muted=" + std::to_string(muted ? 1 : 0) +
+                             ", updated_at=" + std::to_string(TimeUtil::nowMs()) +
+                             " WHERE owner_user_id=" + std::to_string(owner_user_id) +
+                             " AND conversation_id=" + std::to_string(conversation_id))) {
+        return false;
+    }
+    return conn->affectedRows() > 0;
 }
 
 bool ConversationDao::updateLastMessage(uint64_t owner_user_id,
@@ -161,21 +182,27 @@ bool ConversationDao::updateLastMessage(uint64_t owner_user_id,
                                         int64_t now_ms) {
     auto conn = pool_.acquire();
     if (!conn) return false;
-    return conn->executeUpdate("UPDATE conversations SET last_message_id=" + std::to_string(last_message_id) +
-                               ", last_message_preview='" + conn->escapeString(preview) +
-                               "', last_message_at=" + std::to_string(now_ms) +
-                               ", updated_at=" + std::to_string(now_ms) +
-                               " WHERE owner_user_id=" + std::to_string(owner_user_id) +
-                               " AND conversation_id=" + std::to_string(conversation_id));
+    if (!conn->executeUpdate("UPDATE conversations SET last_message_id=" + std::to_string(last_message_id) +
+                             ", last_message_preview='" + conn->escapeString(preview) +
+                             "', last_message_at=" + std::to_string(now_ms) +
+                             ", updated_at=" + std::to_string(now_ms) +
+                             " WHERE owner_user_id=" + std::to_string(owner_user_id) +
+                             " AND conversation_id=" + std::to_string(conversation_id))) {
+        return false;
+    }
+    return conn->affectedRows() > 0;
 }
 
 bool ConversationDao::increaseUnreadCount(uint64_t owner_user_id, uint64_t conversation_id, int delta) {
     auto conn = pool_.acquire();
     if (!conn) return false;
-    return conn->executeUpdate("UPDATE conversations SET unread_count=GREATEST(0, unread_count+" + std::to_string(delta) +
-                               "), updated_at=" + std::to_string(TimeUtil::nowMs()) +
-                               " WHERE owner_user_id=" + std::to_string(owner_user_id) +
-                               " AND conversation_id=" + std::to_string(conversation_id));
+    if (!conn->executeUpdate("UPDATE conversations SET unread_count=GREATEST(0, unread_count+" + std::to_string(delta) +
+                             "), updated_at=" + std::to_string(TimeUtil::nowMs()) +
+                             " WHERE owner_user_id=" + std::to_string(owner_user_id) +
+                             " AND conversation_id=" + std::to_string(conversation_id))) {
+        return false;
+    }
+    return conn->affectedRows() > 0;
 }
 
 bool ConversationDao::upsertOne(MySqlConnection& conn, const Conversation& conversation, bool increase_unread) {

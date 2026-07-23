@@ -2,6 +2,7 @@
 
 #include "common/auth/TokenManager.h"
 #include "common/config/Config.h"
+#include "common/dao/DeviceDao.h"
 #include "common/dao/UserDao.h"
 #include "common/db/MySqlConnectionPool.h"
 #include "common/redis/RedisClient.h"
@@ -20,6 +21,7 @@ public:
     bool init(const std::string& config_path);
 
     UserDao* userDao();
+    DeviceDao* deviceDao();
     RedisClient* redisClient();
     TokenManager* tokenManager();
 
@@ -31,6 +33,7 @@ private:
     Config config_;
     MySqlConnectionPool mysql_pool_;
     std::unique_ptr<UserDao> user_dao_;
+    std::unique_ptr<DeviceDao> device_dao_;
     std::unique_ptr<RedisClient> redis_client_;
     std::unique_ptr<TokenManager> token_manager_;
 

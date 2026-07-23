@@ -7,7 +7,7 @@ These are repository rules for AI agents working on NebulaIM. Keep changes align
 ## Current System
 
 - NebulaIM is a C++17/Linux backend with a custom epoll/Reactor Gateway, TCP/WebSocket PacketCodec, Protobuf/gRPC services, MySQL, Redis, Kafka, Prometheus/Grafana, tracing and systemd deployment assets.
-- Main services: `gateway`, `user_service`, `relation_service`, `message_service`, `conversation_service`, `push_service`, `admin_service`.
+- Main services: `gateway`, `user_service`, `relation_service`, `message_service`, `conversation_service`, `device_service`, `push_service`, `admin_service`.
 - Shared code lives under `common/`; service definitions live under `proto/`; tests live under `tests/`; operational assets live under `deploy/`; documentation lives under `docs/`.
 - Browser clients use the separate Web Bridge project. This backend still owns the binary Packet + Protobuf protocol and gRPC services.
 

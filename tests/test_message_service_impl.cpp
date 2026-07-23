@@ -1,9 +1,11 @@
+#include "TestDeps.h"
 #include "MessageServiceContext.h"
 #include "MessageServiceImpl.h"
 #include "common/auth/PasswordHasher.h"
 #include "common/dao/GroupDao.h"
 #include "common/dao/MessageDao.h"
 #include "common/dao/OfflineMessageDao.h"
+#include "common/dao/RelationDao.h"
 #include "common/dao/UserDao.h"
 #include "common/error/ErrorCode.h"
 #include "common/message/MessageKafkaPayload.h"
@@ -31,13 +33,14 @@ uint64_t createUser(nebula::UserDao* dao, const std::string& prefix) {
 int main() {
     const char* config_path = std::getenv("NEBULA_CONFIG");
     nebula::MessageServiceContext context;
-    assert(context.init(config_path != nullptr ? config_path : "config/nebula.conf"));
-    nebula::MessageServiceImpl service(context.userDao(), context.groupDao(), context.messageDao(), context.offlineMessageDao(), context.redisClient(), context.kafkaProducer(), context.messageIdGenerator(), context.messageDeduplicator(), context.options());
+    if (!context.init(config_path != nullptr ? config_path : "config/nebula.conf")) return nebula::tests::skip("test_message_service_impl", "MessageService dependencies are not reachable");
+    nebula::MessageServiceImpl service(context.userDao(), context.groupDao(), context.relationDao(), context.messageDao(), context.offlineMessageDao(), context.redisClient(), context.kafkaProducer(), context.messageIdGenerator(), context.messageDeduplicator(), context.options(), context.mysqlPool(), context.conversationDao(), context.messageReceiptDao(), context.outboxDao());
     grpc::ServerContext server_context;
 
     uint64_t user1 = createUser(context.userDao(), "msg_u1_");
     uint64_t user2 = createUser(context.userDao(), "msg_u2_");
     uint64_t user3 = createUser(context.userDao(), "msg_u3_");
+    assert(context.relationDao()->addFriendBidirectional(user1, user2));
 
     nebula::proto::SendSingleMessageRequest single;
     single.set_request_id("single");
@@ -110,6 +113,13 @@ int main() {
     assert(ack_resp.response().code() == 0);
     assert(context.messageDao()->getMessageById(single_resp.message_id())->status == nebula::proto::MESSAGE_STATUS_ACKED);
 
+    nebula::proto::AckMessageRequest unauthorized_ack = ack;
+    unauthorized_ack.set_request_id("ack-denied");
+    unauthorized_ack.set_user_id(user3);
+    nebula::proto::AckMessageResponse unauthorized_ack_resp;
+    assert(service.AckMessage(&server_context, &unauthorized_ack, &unauthorized_ack_resp).ok());
+    assert(unauthorized_ack_resp.response().code() == static_cast<int>(nebula::ErrorCode::MESSAGE_PERMISSION_DENIED));
+
     nebula::proto::MessageData data;
     data.set_message_id(777001);
     data.set_conversation_id(888001);
@@ -136,6 +146,15 @@ int main() {
     assert(service.PullOfflineMessages(&server_context, &pull, &pull_resp).ok());
     assert(pull_resp.response().code() == 0);
     assert(pull_resp.messages_size() >= 1);
+    assert(context.offlineMessageDao()->markAsAcked(user2, data.message_id()));
+    offline.payload = "duplicate-pending-payload";
+    offline.status = static_cast<int>(nebula::OfflineMessageStatus::Pending);
+    offline.updated_at = nebula::TimeUtil::nowMs();
+    assert(context.offlineMessageDao()->insertOfflineMessage(offline));
+    auto after_ack_duplicate = context.offlineMessageDao()->listOfflineMessages(user2, 50);
+    for (const auto& item : after_ack_duplicate) {
+        assert(item.message_id != data.message_id());
+    }
 
     nebula::proto::SendSingleMessageRequest bad_user = single;
     bad_user.set_request_id("bad-user");

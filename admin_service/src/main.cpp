@@ -1,6 +1,7 @@
 #include "AdminServiceContext.h"
 #include "AdminServiceImpl.h"
 
+#include "common/app/ShutdownSignal.h"
 #include "common/log/Logger.h"
 #include "common/monitor/MetricsRuntime.h"
 #include "common/rpc/GrpcTlsCredentials.h"
@@ -59,6 +60,9 @@ int main(int argc, char* argv[]) {
     }
     LOG_INFO("AdminService listening on " + context.listenAddress());
     auto metrics_server = nebula::startMetricsServerFromConfig(config_path, "admin_service", 9106);
+    nebula::ShutdownSignalWatcher shutdown([&server]() {
+        if (server) server->Shutdown();
+    });
     server->Wait();
     return 0;
 #else

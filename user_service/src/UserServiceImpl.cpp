@@ -2,6 +2,7 @@
 
 #include "common/auth/PasswordHasher.h"
 #include "common/auth/TokenManager.h"
+#include "common/dao/DeviceDao.h"
 #include "common/dao/UserDao.h"
 #include "common/error/ErrorCode.h"
 #include "common/log/Logger.h"
@@ -44,10 +45,12 @@ std::string tokenPrefix(const std::string& token) {
 }  // namespace
 
 UserServiceImpl::UserServiceImpl(UserDao* user_dao,
+                                 DeviceDao* device_dao,
                                  RedisClient* redis_client,
                                  TokenManager* token_manager,
                                  int password_min_length)
     : user_dao_(user_dao),
+      device_dao_(device_dao),
       redis_client_(redis_client),
       token_manager_(token_manager),
       password_min_length_(password_min_length > 0 ? password_min_length : 6) {}
@@ -143,6 +146,29 @@ grpc::Status UserServiceImpl::Login(grpc::ServerContext* context,
     if (!redis_client_->setEx(token_manager_->tokenKey(token), token_manager_->ttlSeconds(), std::to_string(user->id))) {
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::REDIS_ERROR);
         return grpc::Status::OK;
+    }
+    if (device_dao_ != nullptr && !request->device_id().empty()) {
+        int64_t now = TimeUtil::nowMs();
+        std::string token_hash = TokenManager::tokenHash(token);
+        auto existing_device = device_dao_->getDevice(user->id, request->device_id());
+        if (existing_device.has_value() && !existing_device->token_hash.empty() && existing_device->token_hash != token_hash) {
+            redis_client_->del("nebula:token:" + existing_device->token_hash);
+        }
+        UserDevice device;
+        device.user_id = user->id;
+        device.device_id = request->device_id();
+        device.platform = request->platform();
+        device.device_name = request->device_name();
+        device.token_hash = token_hash;
+        device.last_login_at = now;
+        device.last_active_at = now;
+        device.created_at = now;
+        device.updated_at = now;
+        if (!device_dao_->upsertDevice(device)) {
+            redis_client_->del(token_manager_->tokenKey(token));
+            fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR, "device metadata persist failed");
+            return grpc::Status::OK;
+        }
     }
 
     LOG_INFO("Login success user_id=" + std::to_string(user->id) + " token_prefix=" + tokenPrefix(token));
@@ -258,6 +284,13 @@ grpc::Status UserServiceImpl::Logout(grpc::ServerContext* context, const proto::
         fillResponse(response, request->request_id(), ErrorCode::LOGOUT_FAILED);
         return grpc::Status::OK;
     }
+    if (device_dao_ != nullptr && request->user_id() != 0 && !request->device_id().empty()) {
+        auto device = device_dao_->getDevice(request->user_id(), request->device_id());
+        std::string token_hash = TokenManager::tokenHash(request->token());
+        if (device.has_value() && device->token_hash == token_hash) {
+            device_dao_->clearDeviceToken(request->user_id(), request->device_id(), TimeUtil::nowMs());
+        }
+    }
     fillResponse(response, request->request_id(), ErrorCode::OK, "OK");
     return grpc::Status::OK;
 }
@@ -292,6 +325,26 @@ grpc::Status UserServiceImpl::RefreshToken(grpc::ServerContext* context, const p
         !redis_client_->setEx(token_manager_->tokenKey(new_token), token_manager_->ttlSeconds(), std::to_string(user_id))) {
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::TOKEN_REFRESH_FAILED);
         return grpc::Status::OK;
+    }
+    std::string previous_device_token_hash;
+    std::string new_token_hash = TokenManager::tokenHash(new_token);
+    if (device_dao_ != nullptr && !request->device_id().empty()) {
+        auto device = device_dao_->getDevice(user_id, request->device_id());
+        if (device.has_value()) {
+            previous_device_token_hash = device->token_hash;
+            int64_t now = TimeUtil::nowMs();
+            device->token_hash = new_token_hash;
+            device->last_active_at = now;
+            device->updated_at = now;
+            if (!device_dao_->upsertDevice(*device)) {
+                redis_client_->del(token_manager_->tokenKey(new_token));
+                fillResponse(response->mutable_response(), request->request_id(), ErrorCode::TOKEN_REFRESH_FAILED);
+                return grpc::Status::OK;
+            }
+        }
+    }
+    if (!previous_device_token_hash.empty() && previous_device_token_hash != new_token_hash) {
+        redis_client_->del("nebula:token:" + previous_device_token_hash);
     }
     redis_client_->del(token_manager_->tokenKey(request->token()));
 

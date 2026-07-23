@@ -97,7 +97,7 @@ grpc::Status AdminServiceImpl::RunCleanup(grpc::ServerContext* context, const pr
                                     " LIMIT " + std::to_string(batch_size),
                                 request->dry_run());
     cleaned_rows += cleanupRows(*conn, "offline_messages",
-                                "status=1 AND updated_at<" + std::to_string(now - cleanup_options_.offline_delivered_retention_ms) +
+                                "status=2 AND updated_at<" + std::to_string(now - cleanup_options_.offline_acked_retention_ms) +
                                     " LIMIT " + std::to_string(batch_size),
                                 request->dry_run());
     cleaned_rows += cleanupRows(*conn, "friend_requests",

@@ -21,6 +21,10 @@ std::string TokenManager::tokenKey(const std::string& token) const {
     return "nebula:token:" + sha256Hex(token);
 }
 
+std::string TokenManager::tokenHash(const std::string& token) {
+    return sha256Hex(token);
+}
+
 int TokenManager::ttlSeconds() const {
     return ttl_seconds_;
 }

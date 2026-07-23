@@ -9,6 +9,7 @@ class MessageServiceImpl final : public proto::MessageService::Service {
 public:
     MessageServiceImpl(UserDao* user_dao,
                        GroupDao* group_dao,
+                       RelationDao* relation_dao,
                        MessageDao* message_dao,
                        OfflineMessageDao* offline_message_dao,
                        RedisClient* redis_client,
@@ -56,10 +57,13 @@ public:
 private:
     bool invalidDeps() const;
     bool validateContent(const std::string& request_id, const std::string& content, proto::CommonResponse* response) const;
+    bool canReceiveMessage(uint64_t user_id, const MessageRecord& record) const;
+    bool canReadConversation(uint64_t user_id, uint64_t conversation_id) const;
 
 private:
     UserDao* user_dao_;
     GroupDao* group_dao_;
+    RelationDao* relation_dao_;
     MessageDao* message_dao_;
     OfflineMessageDao* offline_message_dao_;
     RedisClient* redis_client_;

@@ -50,6 +50,7 @@ set(NEBULA_COMMON_SOURCES
     trace/TraceSpan.cpp
     trace/TraceManager.cpp
     trace/OtlpTraceExporter.cpp
+    app/ShutdownSignal.cpp
     tls/TlsConfig.cpp
     tls/TlsContext.cpp
     discovery/StaticServiceResolver.cpp
@@ -87,6 +88,7 @@ if(NEBULA_ENABLE_STORAGE)
         dao/GroupDao.cpp
         dao/MessageDao.cpp
         dao/OfflineMessageDao.cpp
+        dao/DeviceDao.cpp
         dao/FriendRequestDao.cpp
         dao/MessageReceiptDao.cpp
         outbox/OutboxDao.cpp

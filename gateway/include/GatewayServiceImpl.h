@@ -16,6 +16,9 @@ public:
     grpc::Status KickUser(grpc::ServerContext* context,
                           const proto::KickUserRequest* request,
                           proto::KickUserResponse* response) override;
+    grpc::Status KickConnection(grpc::ServerContext* context,
+                                const proto::KickConnectionRequest* request,
+                                proto::KickConnectionResponse* response) override;
     grpc::Status GetOnlineStatus(grpc::ServerContext* context,
                                   const proto::GetOnlineStatusRequest* request,
                                   proto::GetOnlineStatusResponse* response) override;
