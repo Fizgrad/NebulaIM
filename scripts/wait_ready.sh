@@ -39,7 +39,57 @@ wait_tcp() {
 }
 
 wait_mysql() {
-    wait_tcp mysql "$(get_cfg mysql.host 127.0.0.1)" "$(get_cfg mysql.port 3306)"
+    local host port user password database deadline
+    host="$(get_cfg mysql.host 127.0.0.1)"
+    port="$(get_cfg mysql.port 3306)"
+    user="$(get_cfg mysql.user nebula)"
+    password="$(get_cfg mysql.password nebula)"
+    database="$(get_cfg mysql.database nebula_im)"
+    deadline=$((SECONDS + TIMEOUT_SECONDS))
+
+    while true; do
+        if command -v mysql >/dev/null 2>&1; then
+            if MYSQL_PWD="${password}" mysql \
+                --protocol=TCP \
+                --connect-timeout=2 \
+                --host="${host}" \
+                --port="${port}" \
+                --user="${user}" \
+                --database="${database}" \
+                --batch \
+                --skip-column-names \
+                --execute="SELECT 1" >/dev/null 2>&1; then
+                break
+            fi
+        elif command -v docker >/dev/null 2>&1 &&
+             docker inspect nebula-mysql >/dev/null 2>&1; then
+            if docker exec \
+                -e "MYSQL_PWD=${password}" \
+                nebula-mysql \
+                mysql \
+                --protocol=TCP \
+                --connect-timeout=2 \
+                --host=127.0.0.1 \
+                --port=3306 \
+                --user="${user}" \
+                --database="${database}" \
+                --batch \
+                --skip-column-names \
+                --execute="SELECT 1" >/dev/null 2>&1; then
+                break
+            fi
+        elif can_tcp "${host}" "${port}"; then
+            break
+        fi
+
+        if (( SECONDS >= deadline )); then
+            echo "[wait-ready][FAIL] mysql ${host}:${port}" >&2
+            return 1
+        fi
+        sleep 1
+    done
+
+    echo "[wait-ready][OK] mysql ${host}:${port}"
 }
 
 wait_redis() {
