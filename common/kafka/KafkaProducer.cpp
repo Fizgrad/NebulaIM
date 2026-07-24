@@ -4,29 +4,45 @@
 
 #include <chrono>
 #include <librdkafka/rdkafkacpp.h>
+#include <mutex>
 #include <utility>
 
 namespace nebula {
 
+namespace {
+
+struct DeliveryState {
+    std::mutex mutex;
+    bool done = false;
+    bool ok = false;
+    std::string error;
+};
+
+using DeliveryHandle = std::shared_ptr<DeliveryState>;
+
+}  // namespace
+
 class KafkaProducer::DeliveryReportCb : public RdKafka::DeliveryReportCb {
 public:
-    explicit DeliveryReportCb(KafkaProducer* owner) : owner_(owner) {}
-
     void dr_cb(RdKafka::Message& message) override {
+        auto* handle = static_cast<DeliveryHandle*>(message.msg_opaque());
+        if (handle == nullptr) return;
+        DeliveryHandle state = std::move(*handle);
+        delete handle;
         if (message.err()) {
             LOG_ERROR("Kafka delivery failed: " + message.errstr());
         }
-        if (owner_ != nullptr) {
-            owner_->recordDelivery(!message.err(), message.errstr());
+        {
+            std::lock_guard<std::mutex> lock(state->mutex);
+            state->done = true;
+            state->ok = !message.err();
+            state->error = message.errstr();
         }
     }
-
-private:
-    KafkaProducer* owner_;
 };
 
 KafkaProducer::KafkaProducer()
-    : delivery_cb_(std::make_unique<DeliveryReportCb>(this)),
+    : delivery_cb_(std::make_unique<DeliveryReportCb>()),
       producer_(nullptr) {}
 
 KafkaProducer::~KafkaProducer() {
@@ -40,6 +56,8 @@ bool KafkaProducer::init(const KafkaProducerConfig& config) {
     std::unique_ptr<RdKafka::Conf> conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
     if (conf->set("bootstrap.servers", config.brokers, errstr) != RdKafka::Conf::CONF_OK ||
         conf->set("client.id", config.client_id, errstr) != RdKafka::Conf::CONF_OK ||
+        conf->set("message.timeout.ms", std::to_string(config.delivery_timeout_ms > 0 ? config.delivery_timeout_ms : 5000), errstr) !=
+            RdKafka::Conf::CONF_OK ||
         conf->set("dr_cb", delivery_cb_.get(), errstr) != RdKafka::Conf::CONF_OK) {
         LOG_ERROR("Kafka producer config failed: " + errstr);
         return false;
@@ -52,24 +70,22 @@ bool KafkaProducer::init(const KafkaProducerConfig& config) {
     }
     delete static_cast<RdKafka::Producer*>(producer_);
     producer_ = producer;
+    delivery_timeout_ms_ = config.delivery_timeout_ms > 0 ? config.delivery_timeout_ms : 5000;
     return true;
 }
 
 bool KafkaProducer::produce(const std::string& topic, const std::string& key, const std::string& payload) {
-    return produce(topic, key, payload, 5000);
+    return produce(topic, key, payload, delivery_timeout_ms_ + 250);
 }
 
 bool KafkaProducer::produce(const std::string& topic, const std::string& key, const std::string& payload, int delivery_timeout_ms) {
-    std::lock_guard<std::mutex> produce_lock(produce_mutex_);
     auto* producer = static_cast<RdKafka::Producer*>(producer_);
     if (producer == nullptr) {
         LOG_ERROR("Kafka producer is not initialized");
         return false;
     }
-    {
-        std::lock_guard<std::mutex> lock(delivery_mutex_);
-        deliveries_.clear();
-    }
+    DeliveryHandle state = std::make_shared<DeliveryState>();
+    auto* delivery_handle = new DeliveryHandle(state);
     RdKafka::ErrorCode err = producer->produce(topic,
                                                RdKafka::Topic::PARTITION_UA,
                                                RdKafka::Producer::RK_MSG_COPY,
@@ -79,9 +95,10 @@ bool KafkaProducer::produce(const std::string& topic, const std::string& key, co
                                                key.size(),
                                                0,
                                                nullptr,
-                                               nullptr);
+                                               delivery_handle);
     producer->poll(0);
     if (err != RdKafka::ERR_NO_ERROR) {
+        delete delivery_handle;
         LOG_ERROR("Kafka produce failed: " + RdKafka::err2str(err));
         return false;
     }
@@ -90,27 +107,23 @@ bool KafkaProducer::produce(const std::string& topic, const std::string& key, co
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
     while (std::chrono::steady_clock::now() < deadline) {
         producer->poll(50);
-        std::unique_lock<std::mutex> lock(delivery_mutex_);
-        if (!deliveries_.empty()) {
-            DeliveryStatus status = std::move(deliveries_.front());
-            deliveries_.pop_front();
-            if (!status.ok) {
-                LOG_ERROR("Kafka delivery ack failed: " + status.error);
+        std::lock_guard<std::mutex> lock(state->mutex);
+        if (state->done) {
+            if (!state->ok) {
+                LOG_ERROR("Kafka delivery ack failed: " + state->error);
             }
-            return status.ok;
+            return state->ok;
         }
     }
 
     producer->poll(0);
     {
-        std::unique_lock<std::mutex> lock(delivery_mutex_);
-        if (!deliveries_.empty()) {
-            DeliveryStatus status = std::move(deliveries_.front());
-            deliveries_.pop_front();
-            if (!status.ok) {
-                LOG_ERROR("Kafka delivery ack failed: " + status.error);
+        std::lock_guard<std::mutex> lock(state->mutex);
+        if (state->done) {
+            if (!state->ok) {
+                LOG_ERROR("Kafka delivery ack failed: " + state->error);
             }
-            return status.ok;
+            return state->ok;
         }
     }
     LOG_ERROR("Kafka delivery ack timed out topic=" + topic + " key=" + key);
@@ -122,14 +135,6 @@ void KafkaProducer::flush(int timeout_ms) {
     if (producer != nullptr) {
         producer->flush(timeout_ms);
     }
-}
-
-void KafkaProducer::recordDelivery(bool ok, std::string error) {
-    {
-        std::lock_guard<std::mutex> lock(delivery_mutex_);
-        deliveries_.push_back(DeliveryStatus{ok, std::move(error)});
-    }
-    delivery_cv_.notify_one();
 }
 
 }  // namespace nebula

@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS messages (
     message_id BIGINT UNSIGNED NOT NULL UNIQUE,
     conversation_id BIGINT UNSIGNED NOT NULL,
     from_user_id BIGINT UNSIGNED NOT NULL,
+    client_sequence_id INT UNSIGNED NULL,
     to_user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
     group_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
     message_type INT NOT NULL DEFAULT 1,
@@ -61,9 +62,10 @@ CREATE TABLE IF NOT EXISTS messages (
     recalled_at BIGINT NOT NULL DEFAULT 0,
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
-    INDEX idx_conversation_time (conversation_id, created_at),
+    INDEX idx_conversation_cursor (conversation_id, created_at, message_id),
     INDEX idx_message_id (message_id),
     INDEX idx_user_id (from_user_id),
+    UNIQUE KEY uk_message_sender_sequence (from_user_id, client_sequence_id),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

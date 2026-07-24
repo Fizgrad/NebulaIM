@@ -79,7 +79,7 @@ Failure below max retry writes retry topic. Failure over max retry writes DLQ an
 ./build/tests/test_push_worker
 ```
 
-## Interview points
+## Knowledge checks
 
 1. PushService consumes Kafka to decouple message acceptance from delivery.
 2. MessageService should not directly push because delivery is slow and fanout-heavy.

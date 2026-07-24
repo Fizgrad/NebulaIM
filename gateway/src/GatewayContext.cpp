@@ -1,5 +1,6 @@
 #include "GatewayContext.h"
 
+#include "common/config/StorageConfig.h"
 #include "common/log/Logger.h"
 #include "common/rpc/InternalRpcAuth.h"
 #include "common/trace/TraceManager.h"
@@ -34,6 +35,10 @@ bool GatewayContext::init(const std::string& config_path) {
     options_.rate_limit.message_per_second = getPositiveSize(config_, "rate_limit.message_per_second", options_.rate_limit.message_per_second);
     options_.rate_limit.connection_packet_per_second =
         getPositiveSize(config_, "rate_limit.connection_packet_per_second", options_.rate_limit.connection_packet_per_second);
+    options_.rate_limit.max_bucket_count =
+        getPositiveSize(config_, "rate_limit.max_bucket_count", options_.rate_limit.max_bucket_count);
+    options_.rate_limit.bucket_idle_seconds =
+        getPositiveSize(config_, "rate_limit.bucket_idle_seconds", options_.rate_limit.bucket_idle_seconds);
     options_.tcp_tls = TlsConfigLoader::fromConfig(config_, "gateway.tls.");
     options_.user_service_addr = config_.getString("user_service.addr", options_.user_service_addr);
     options_.message_service_addr = config_.getString("message_service.addr", options_.message_service_addr);
@@ -52,11 +57,7 @@ bool GatewayContext::init(const std::string& config_path) {
     }
 
     auto redis = std::make_unique<RedisClient>();
-    RedisConfig redis_config;
-    redis_config.host = config_.getString("redis.host", redis_config.host);
-    redis_config.port = config_.getInt("redis.port", redis_config.port);
-    redis_config.timeout_ms = config_.getInt("redis.timeout_ms", redis_config.timeout_ms);
-    redis_config.password = config_.getString("redis.password", redis_config.password);
+    RedisConfig redis_config = loadRedisConfig(config_);
     if (!redis->connect(redis_config)) return false;
 
     redis_client_ = std::move(redis);

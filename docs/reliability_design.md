@@ -1,6 +1,6 @@
 # Reliability Design
 
-NebulaIM now has basic reliability primitives:
+NebulaIM uses these reliability primitives:
 
 - Rate limiting: token bucket implementation for login, message, and per-connection packet controls. Gateway loads `rate_limit.*` from config and applies packet limits after decoding each Packet, so multiple packets in one TCP read or WebSocket frame are still counted individually.
 - Circuit breaker: CLOSED, OPEN, HALF_OPEN states with failure threshold and open timeout.
@@ -9,7 +9,7 @@ NebulaIM now has basic reliability primitives:
 - DLQ/dead status: exhausted events are marked dead and can be emitted to the DLQ topic.
 - Kafka consumer acknowledgement: PushService disables auto commit and commits offsets only after online delivery, retry enqueue, DLQ/offline persistence, or final handled outcome succeeds.
 - Kafka producer acknowledgement: `KafkaProducer::produce` waits for the librdkafka delivery callback instead of treating local enqueue as broker delivery success.
-- Idempotency: message dedup uses Redis keying by user and client sequence. The dedup mark is written after the DB transaction commits; if that Redis write fails, MessageService logs the failure and still returns the committed message as successful.
+- Idempotency: the MySQL unique key on sender and client sequence is authoritative under concurrent retries. Redis provides a fast lookup path and is updated after commit; a Redis write failure is logged without turning an already committed message into an API failure.
 - Trace ID and spans: `TraceContext` carries request trace IDs through logs and payload metadata without using Prometheus labels. `TraceSpan` records Gateway, MessageService, and PushService spans and `TraceManager` exports batches to OTLP/HTTP for Jaeger.
 - Service discovery: service clients depend on a resolver abstraction; the current implementation is static config based.
 - Redis client safety: `RedisClient` protects a single hiredis connection with a mutex so multi-Reactor Gateway callbacks cannot interleave commands on the same connection.
@@ -26,6 +26,6 @@ NebulaIM now has basic reliability primitives:
 
 Degradation policy: Redis online failures should mark online state unknown/offline; Kafka failures should rely on outbox retry; backend RPC circuit-open should return `SERVICE_UNAVAILABLE`/`CIRCUIT_OPEN` instead of blocking indefinitely.
 
-Outbox workers now claim events before publishing, using a short lease state so multiple workers do not publish the same pending row in normal operation. Message send and message recall both write the domain update and outbox event in the same local MySQL transaction. Consumers still need idempotency because distributed systems can retry after partial failures.
+Outbox workers claim events before publishing, using a short lease state so multiple workers do not publish the same pending row in normal operation. Message send and message recall both write the domain update and outbox event in the same local MySQL transaction. Consumers still need idempotency because distributed systems can retry after partial failures.
 
 Online debugging starts from trace ID or Jaeger trace, then checks Gateway logs for login bind/online-write results, PushService logs for Kafka poll/commit and delivery decisions, `outbox_events`, Kafka consumer lag and consumer-group membership, Redis multi-device online keys, stale device members, AdminService HealthCheck/GetSystemStats/GetOutboxStats/GetKafkaLagInfo/GetServiceOverview/ListAuditEvents, and Prometheus counters.

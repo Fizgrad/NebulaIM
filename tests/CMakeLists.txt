@@ -406,6 +406,12 @@ endforeach()
 
 foreach(test_name IN LISTS NEBULA_INTEGRATION_TESTS)
     if(TEST ${test_name})
-        set_tests_properties(${test_name} PROPERTIES LABELS integration)
+        set_tests_properties(
+            ${test_name}
+            PROPERTIES
+                LABELS integration
+                SKIP_RETURN_CODE 77
+                WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+        )
     endif()
 endforeach()

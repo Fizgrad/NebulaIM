@@ -1,5 +1,6 @@
 #include "common/config/Config.h"
 #include "common/auth/PasswordHasher.h"
+#include "common/auth/TokenManager.h"
 #include "common/dao/MessageDao.h"
 #include "common/dao/UserDao.h"
 #include "common/db/MySqlConnectionPool.h"
@@ -70,10 +71,15 @@ int main() {
     }
     LOG_INFO("created user id=" + std::to_string(user_id));
 
-    std::string token = "demo-token-" + std::to_string(user_id);
+    nebula::TokenManager token_manager(3600);
+    std::string token = token_manager.generateToken(user_id);
+    if (token.empty()) {
+        LOG_ERROR("generate token failed");
+        return 1;
+    }
     std::string device_id = "storage-demo-device";
     std::string connection_id = "storage-demo-conn-" + std::to_string(user_id);
-    redis.setEx("nebula:token:" + token, 3600, std::to_string(user_id));
+    redis.setEx(token_manager.tokenKey(token), token_manager.ttlSeconds(), std::to_string(user_id));
     redis.sadd("nebula:user:devices:" + std::to_string(user_id), device_id);
     redis.expire("nebula:user:devices:" + std::to_string(user_id), 60);
     redis.setEx("nebula:user:online:" + std::to_string(user_id) + ":" + device_id, 60, "gateway-1");

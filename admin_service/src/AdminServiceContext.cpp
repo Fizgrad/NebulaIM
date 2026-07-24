@@ -1,5 +1,6 @@
 #include "AdminServiceContext.h"
 
+#include "common/config/StorageConfig.h"
 #include "common/log/Logger.h"
 #include "common/rpc/InternalRpcAuth.h"
 #include "common/trace/TraceManager.h"
@@ -46,23 +47,18 @@ bool AdminServiceContext::init(const std::string& config_path) {
     cleanup_options_.cleanup_batch_size = config_.getInt("admin.cleanup.batch_size", cleanup_options_.cleanup_batch_size);
 
 #if defined(NEBULA_ENABLE_STORAGE)
-    MySqlConfig mysql;
-    mysql.host = config_.getString("mysql.host", mysql.host);
-    mysql.port = config_.getInt("mysql.port", mysql.port);
-    mysql.user = config_.getString("mysql.user", mysql.user);
-    mysql.password = config_.getString("mysql.password", mysql.password);
-    mysql.database = config_.getString("mysql.database", mysql.database);
+    MySqlConfig mysql = loadMySqlConfig(config_);
+    runtime_config_.mysql_host = mysql.host;
+    runtime_config_.mysql_password = mysql.password;
     if (!mysql_pool_.init(mysql, static_cast<size_t>(config_.getInt("mysql.pool_size", 4)))) {
         LOG_ERROR("failed to initialize MySQL pool for AdminService");
         return false;
     }
 
     redis_client_ = std::make_unique<RedisClient>();
-    RedisConfig redis;
-    redis.host = config_.getString("redis.host", redis.host);
-    redis.port = config_.getInt("redis.port", redis.port);
-    redis.timeout_ms = config_.getInt("redis.timeout_ms", redis.timeout_ms);
-    redis.password = config_.getString("redis.password", redis.password);
+    RedisConfig redis = loadRedisConfig(config_);
+    runtime_config_.redis_host = redis.host;
+    runtime_config_.redis_password = redis.password;
     if (!redis_client_->connect(redis)) {
         LOG_ERROR("failed to connect Redis for AdminService: " + redis_client_->lastError());
         return false;

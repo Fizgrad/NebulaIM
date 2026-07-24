@@ -13,9 +13,6 @@ public:
     grpc::Status ListConversations(grpc::ServerContext* context,
                                    const proto::ListConversationsRequest* request,
                                    proto::ListConversationsResponse* response) override;
-    grpc::Status MarkConversationRead(grpc::ServerContext* context,
-                                      const proto::ConversationMarkReadRequest* request,
-                                      proto::CommonResponse* response) override;
     grpc::Status DeleteConversation(grpc::ServerContext* context,
                                     const proto::ConversationDeleteRequest* request,
                                     proto::CommonResponse* response) override;

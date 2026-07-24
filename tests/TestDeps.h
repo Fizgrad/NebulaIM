@@ -1,19 +1,36 @@
 #pragma once
 
 #include "common/config/Config.h"
+#include "common/config/StorageConfig.h"
 #include "common/db/MySqlConnectionPool.h"
 #include "common/kafka/KafkaConsumer.h"
 #include "common/kafka/KafkaProducer.h"
 #include "common/redis/RedisClient.h"
 
+#include <cstdlib>
 #include <iostream>
 #include <string>
 
 namespace nebula::tests {
 
+inline std::string envOr(const char* name, const std::string& fallback) {
+    const char* value = std::getenv(name);
+    return value != nullptr && value[0] != '\0' ? value : fallback;
+}
+
+inline int envIntOr(const char* name, int fallback) {
+    const std::string value = envOr(name, "");
+    if (value.empty()) return fallback;
+    try {
+        return std::stoi(value);
+    } catch (...) {
+        return fallback;
+    }
+}
+
 inline int skip(const std::string& test_name, const std::string& reason) {
     std::cout << test_name << " skipped: " << reason << "\n";
-    return 0;
+    return 77;
 }
 
 inline bool loadConfig(Config* config, std::string* reason) {
@@ -23,34 +40,24 @@ inline bool loadConfig(Config* config, std::string* reason) {
 }
 
 inline RedisConfig redisConfig(const Config& config) {
-    RedisConfig redis;
-    redis.host = config.getString("redis.host", redis.host);
-    redis.port = config.getInt("redis.port", redis.port);
-    redis.timeout_ms = config.getInt("redis.timeout_ms", redis.timeout_ms);
-    redis.password = config.getString("redis.password", redis.password);
-    return redis;
+    return loadRedisConfig(config);
 }
 
 inline MySqlConfig mysqlConfig(const Config& config) {
-    MySqlConfig mysql;
-    mysql.host = config.getString("mysql.host", mysql.host);
-    mysql.port = config.getInt("mysql.port", mysql.port);
-    mysql.user = config.getString("mysql.user", mysql.user);
-    mysql.password = config.getString("mysql.password", mysql.password);
-    mysql.database = config.getString("mysql.database", mysql.database);
-    return mysql;
+    return loadMySqlConfig(config);
 }
 
 inline KafkaProducerConfig kafkaProducerConfig(const Config& config) {
     KafkaProducerConfig kafka;
-    kafka.brokers = config.getString("kafka.brokers", kafka.brokers);
+    kafka.brokers = envOr("NEBULA_TEST_KAFKA_BROKERS", config.getString("kafka.brokers", kafka.brokers));
     kafka.client_id = config.getString("kafka.producer.client_id", kafka.client_id);
+    kafka.delivery_timeout_ms = config.getInt("kafka.producer.delivery_timeout_ms", kafka.delivery_timeout_ms);
     return kafka;
 }
 
 inline KafkaConsumerConfig kafkaConsumerConfig(const Config& config) {
     KafkaConsumerConfig kafka;
-    kafka.brokers = config.getString("kafka.brokers", kafka.brokers);
+    kafka.brokers = envOr("NEBULA_TEST_KAFKA_BROKERS", config.getString("kafka.brokers", kafka.brokers));
     kafka.group_id = config.getString("kafka.consumer.group_id", kafka.group_id);
     kafka.client_id = config.getString("kafka.consumer.client_id", kafka.client_id);
     kafka.auto_offset_reset = config.getString("kafka.consumer.auto_offset_reset", kafka.auto_offset_reset);

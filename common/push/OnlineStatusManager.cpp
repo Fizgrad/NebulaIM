@@ -41,10 +41,16 @@ std::vector<OnlineStatus> OnlineStatusManager::getOnlineStatuses(uint64_t user_i
 
 bool OnlineStatusManager::setOnline(uint64_t user_id, const std::string& device_id, const std::string& gateway_id, const std::string& connection_id, int ttl_seconds) {
     if (redis_client_ == nullptr || user_id == 0 || device_id.empty() || gateway_id.empty() || connection_id.empty()) return false;
-    redis_client_->sadd(devicesKey(user_id), device_id);
-    redis_client_->expire(devicesKey(user_id), ttl_seconds);
-    return redis_client_->setEx(onlineKey(user_id, device_id), ttl_seconds, gateway_id) &&
-           redis_client_->setEx(connKey(user_id, device_id), ttl_seconds, connection_id);
+    bool ok = redis_client_->sadd(devicesKey(user_id), device_id) &&
+              redis_client_->expire(devicesKey(user_id), ttl_seconds) &&
+              redis_client_->setEx(onlineKey(user_id, device_id), ttl_seconds, gateway_id) &&
+              redis_client_->setEx(connKey(user_id, device_id), ttl_seconds, connection_id);
+    if (!ok) {
+        redis_client_->del(onlineKey(user_id, device_id));
+        redis_client_->del(connKey(user_id, device_id));
+        redis_client_->srem(devicesKey(user_id), device_id);
+    }
+    return ok;
 }
 
 bool OnlineStatusManager::setOffline(uint64_t user_id) {

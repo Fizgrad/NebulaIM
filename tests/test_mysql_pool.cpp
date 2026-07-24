@@ -16,6 +16,18 @@ int main() {
         assert(result);
         assert(result->next());
         assert(result->getInt("value") == 1);
+        assert(conn->executeUpdate(
+            "CREATE TEMPORARY TABLE nebula_connection_state_test("
+            "id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,"
+            "value INT NOT NULL)"));
+        assert(conn->executeUpdate("INSERT INTO nebula_connection_state_test(value) VALUES(1)"));
+        const uint64_t inserted_id = conn->lastInsertId();
+        assert(inserted_id > 0);
+        assert(conn->affectedRows() == 1);
+        assert(conn->executeUpdate(
+            "UPDATE nebula_connection_state_test SET value=2 WHERE id=" +
+            std::to_string(inserted_id)));
+        assert(conn->affectedRows() == 1);
     }
     {
         auto c1 = pool.acquire();

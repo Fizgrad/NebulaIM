@@ -4,6 +4,7 @@
 #include "common/db/MySqlConnectionPool.h"
 #include "common/db/MySqlResult.h"
 #include "common/db/MySqlTransaction.h"
+#include "common/trace/TraceId.h"
 #include "common/utils/TimeUtil.h"
 
 namespace nebula {
@@ -25,6 +26,7 @@ OutboxEvent parseOutboxEvent(MySqlResult& result) {
     event.created_at = result.getInt64("created_at");
     event.updated_at = result.getInt64("updated_at");
     event.trace_id = result.getString("trace_id");
+    event.claim_token = result.getString("claim_token");
     return event;
 }
 
@@ -70,39 +72,54 @@ std::vector<OutboxEvent> OutboxDao::claimPendingEvents(size_t limit, int64_t now
     auto result = conn->executeQuery(sql);
     while (result && result->next()) events.push_back(parseOutboxEvent(*result));
     int64_t lease_until = now_ms + (lease_ms > 0 ? lease_ms : 30000);
-    for (const auto& event : events) {
+    const std::string claim_token = TraceId::generate();
+    for (auto& event : events) {
         if (!conn->executeUpdate("UPDATE outbox_events SET status=4, next_retry_at=" + std::to_string(lease_until) +
+                                 ", claim_token='" + conn->escapeString(claim_token) + "'" +
                                  ", updated_at=" + std::to_string(now_ms) +
                                  " WHERE event_id=" + std::to_string(event.event_id))) {
             events.clear();
             return events;
         }
+        event.claim_token = claim_token;
     }
     if (!tx.commit()) events.clear();
     return events;
 }
 
-bool OutboxDao::markPublished(uint64_t event_id) {
+bool OutboxDao::markPublished(uint64_t event_id, const std::string& claim_token) {
     auto conn = pool_.acquire();
-    if (!conn) return false;
-    return conn->executeUpdate("UPDATE outbox_events SET status=1, updated_at=" + std::to_string(TimeUtil::nowMs()) +
-                               " WHERE event_id=" + std::to_string(event_id));
+    if (!conn || claim_token.empty()) return false;
+    if (!conn->executeUpdate("UPDATE outbox_events SET status=1, claim_token='', updated_at=" + std::to_string(TimeUtil::nowMs()) +
+                             " WHERE event_id=" + std::to_string(event_id) + " AND status=4 AND claim_token='" +
+                             conn->escapeString(claim_token) + "'")) {
+        return false;
+    }
+    return conn->affectedRows() > 0;
 }
 
-bool OutboxDao::markFailed(uint64_t event_id, int retry_count, int64_t next_retry_at) {
+bool OutboxDao::markFailed(uint64_t event_id, const std::string& claim_token, int retry_count, int64_t next_retry_at) {
     auto conn = pool_.acquire();
-    if (!conn) return false;
-    return conn->executeUpdate("UPDATE outbox_events SET status=2, retry_count=" + std::to_string(retry_count) +
-                               ", next_retry_at=" + std::to_string(next_retry_at) +
-                               ", updated_at=" + std::to_string(TimeUtil::nowMs()) +
-                               " WHERE event_id=" + std::to_string(event_id));
+    if (!conn || claim_token.empty()) return false;
+    if (!conn->executeUpdate("UPDATE outbox_events SET status=2, claim_token='', retry_count=" + std::to_string(retry_count) +
+                             ", next_retry_at=" + std::to_string(next_retry_at) +
+                             ", updated_at=" + std::to_string(TimeUtil::nowMs()) +
+                             " WHERE event_id=" + std::to_string(event_id) + " AND status=4 AND claim_token='" +
+                             conn->escapeString(claim_token) + "'")) {
+        return false;
+    }
+    return conn->affectedRows() > 0;
 }
 
-bool OutboxDao::markDead(uint64_t event_id) {
+bool OutboxDao::markDead(uint64_t event_id, const std::string& claim_token) {
     auto conn = pool_.acquire();
-    if (!conn) return false;
-    return conn->executeUpdate("UPDATE outbox_events SET status=3, updated_at=" + std::to_string(TimeUtil::nowMs()) +
-                               " WHERE event_id=" + std::to_string(event_id));
+    if (!conn || claim_token.empty()) return false;
+    if (!conn->executeUpdate("UPDATE outbox_events SET status=3, claim_token='', updated_at=" + std::to_string(TimeUtil::nowMs()) +
+                             " WHERE event_id=" + std::to_string(event_id) + " AND status=4 AND claim_token='" +
+                             conn->escapeString(claim_token) + "'")) {
+        return false;
+    }
+    return conn->affectedRows() > 0;
 }
 
 }  // namespace nebula

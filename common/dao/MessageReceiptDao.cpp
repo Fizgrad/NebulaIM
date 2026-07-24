@@ -11,34 +11,50 @@ MessageReceiptDao::MessageReceiptDao(MySqlConnectionPool& pool) : pool_(pool) {}
 bool MessageReceiptDao::upsertDelivered(uint64_t message_id, uint64_t user_id, int64_t delivered_at) {
     auto conn = pool_.acquire();
     if (!conn) return false;
+    return upsertDelivered(*conn, message_id, user_id, delivered_at);
+}
+
+bool MessageReceiptDao::upsertDelivered(MySqlConnection& conn, uint64_t message_id, uint64_t user_id, int64_t delivered_at) {
     std::string sql = "INSERT INTO message_receipts(message_id,user_id,delivered_at,read_at,created_at,updated_at) VALUES(" +
                       std::to_string(message_id) + "," + std::to_string(user_id) + "," +
                       std::to_string(delivered_at) + ",0," + std::to_string(delivered_at) + "," +
                       std::to_string(delivered_at) +
                       ") ON DUPLICATE KEY UPDATE delivered_at=GREATEST(delivered_at,VALUES(delivered_at)), updated_at=VALUES(updated_at)";
-    return conn->executeUpdate(sql);
+    return conn.executeUpdate(sql);
 }
 
 bool MessageReceiptDao::markRead(uint64_t message_id, uint64_t user_id, int64_t read_at) {
     auto conn = pool_.acquire();
     if (!conn) return false;
+    return markRead(*conn, message_id, user_id, read_at);
+}
+
+bool MessageReceiptDao::markRead(MySqlConnection& conn, uint64_t message_id, uint64_t user_id, int64_t read_at) {
     std::string sql = "INSERT INTO message_receipts(message_id,user_id,delivered_at,read_at,created_at,updated_at) VALUES(" +
                       std::to_string(message_id) + "," + std::to_string(user_id) + "," +
                       std::to_string(read_at) + "," + std::to_string(read_at) + "," +
                       std::to_string(read_at) + "," + std::to_string(read_at) +
                       ") ON DUPLICATE KEY UPDATE delivered_at=GREATEST(delivered_at,VALUES(delivered_at)), read_at=GREATEST(read_at,VALUES(read_at)), updated_at=VALUES(updated_at)";
-    return conn->executeUpdate(sql);
+    return conn.executeUpdate(sql);
 }
 
-bool MessageReceiptDao::markConversationRead(uint64_t conversation_id, uint64_t user_id, int64_t read_at) {
-    auto conn = pool_.acquire();
-    if (!conn) return false;
+bool MessageReceiptDao::markConversationRead(MySqlConnection& conn,
+                                             uint64_t conversation_id,
+                                             uint64_t user_id,
+                                             uint64_t up_to_message_id,
+                                             int64_t up_to_created_at,
+                                             int64_t read_at) {
     std::string sql = "INSERT INTO message_receipts(message_id,user_id,delivered_at,read_at,created_at,updated_at) "
                       "SELECT message_id," + std::to_string(user_id) + "," + std::to_string(read_at) + "," +
                       std::to_string(read_at) + "," + std::to_string(read_at) + "," + std::to_string(read_at) +
                       " FROM messages WHERE conversation_id=" + std::to_string(conversation_id) +
+                      " AND (created_at<" + std::to_string(up_to_created_at) +
+                      " OR (created_at=" + std::to_string(up_to_created_at) +
+                      " AND message_id<=" + std::to_string(up_to_message_id) + "))" +
+                      " AND from_user_id<>" + std::to_string(user_id) +
+                      " AND recalled=0" +
                       " ON DUPLICATE KEY UPDATE delivered_at=GREATEST(delivered_at,VALUES(delivered_at)), read_at=GREATEST(read_at,VALUES(read_at)), updated_at=VALUES(updated_at)";
-    return conn->executeUpdate(sql);
+    return conn.executeUpdate(sql);
 }
 
 std::vector<MessageReadState> MessageReceiptDao::getReadState(uint64_t message_id) {

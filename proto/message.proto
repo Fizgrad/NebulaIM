@@ -7,6 +7,7 @@ import "common.proto";
 service MessageService {
   rpc SendSingleMessage(SendSingleMessageRequest) returns (SendSingleMessageResponse);
   rpc SendGroupMessage(SendGroupMessageRequest) returns (SendGroupMessageResponse);
+  rpc ListConversationMessages(ListConversationMessagesRequest) returns (ListConversationMessagesResponse);
   rpc AckMessage(AckMessageRequest) returns (AckMessageResponse);
   rpc PullOfflineMessages(PullOfflineMessagesRequest) returns (PullOfflineMessagesResponse);
   rpc MarkMessageRead(MarkMessageReadRequest) returns (CommonResponse);
@@ -45,6 +46,23 @@ message SendGroupMessageResponse {
   int64 server_timestamp = 3;
 }
 
+message ListConversationMessagesRequest {
+  string request_id = 1;
+  uint64 requester_user_id = 2;
+  uint64 conversation_id = 3;
+  int64 before_time = 4;
+  uint32 page_size = 5;
+  uint64 before_message_id = 6;
+}
+
+message ListConversationMessagesResponse {
+  CommonResponse response = 1;
+  repeated MessageData messages = 2;
+  int64 next_before_time = 3;
+  uint64 next_before_message_id = 4;
+  bool has_more = 5;
+}
+
 message AckMessageRequest {
   string request_id = 1;
   uint64 user_id = 2;
@@ -77,11 +95,13 @@ message MarkConversationReadRequest {
   string request_id = 1;
   uint64 user_id = 2;
   uint64 conversation_id = 3;
+  uint64 up_to_message_id = 4;
 }
 
 message GetMessageReadStateRequest {
   string request_id = 1;
   uint64 message_id = 2;
+  uint64 requester_user_id = 3;
 }
 
 message MessageReadState {

@@ -25,8 +25,10 @@ bool requireInternalRpc(grpc::ServerContext* context, const std::string& request
 }
 }
 
-GatewayServiceImpl::GatewayServiceImpl(ConnectionManager* connection_manager, PacketCodec* codec, std::string gateway_id)
-    : connection_manager_(connection_manager), codec_(codec), gateway_id_(std::move(gateway_id)) {}
+GatewayServiceImpl::GatewayServiceImpl(ConnectionManager* connection_manager,
+                                       GatewayOnlineManager* online_manager,
+                                       PacketCodec* codec)
+    : connection_manager_(connection_manager), online_manager_(online_manager), codec_(codec) {}
 
 grpc::Status GatewayServiceImpl::DeliverToConnection(grpc::ServerContext* context, const proto::DeliverToConnectionRequest* request, proto::DeliverToConnectionResponse* response) {
     if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
@@ -105,12 +107,16 @@ grpc::Status GatewayServiceImpl::KickConnection(grpc::ServerContext* context, co
 
 grpc::Status GatewayServiceImpl::GetOnlineStatus(grpc::ServerContext* context, const proto::GetOnlineStatusRequest* request, proto::GetOnlineStatusResponse* response) {
     if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
-    std::vector<ConnectionContext> contexts = connection_manager_ ? connection_manager_->getContextsByUserId(request->user_id()) : std::vector<ConnectionContext>{};
+    if (request->user_id() == 0 || online_manager_ == nullptr) {
+        fill(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT);
+        return grpc::Status::OK;
+    }
+    const auto location = online_manager_->findOnline(request->user_id());
     fill(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
-    if (!contexts.empty()) {
+    if (location.has_value()) {
         response->set_online(true);
-        response->set_gateway_id(gateway_id_);
-        response->set_connection_id(contexts.front().connection_id);
+        response->set_gateway_id(location->gateway_id);
+        response->set_connection_id(location->connection_id);
     } else {
         response->set_online(false);
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/gateway/ConnectionManager.h"
+#include "common/gateway/GatewayOnlineManager.h"
 #include "common/protocol/PacketCodec.h"
 #include "gateway.grpc.pb.h"
 
@@ -8,7 +9,9 @@ namespace nebula {
 
 class GatewayServiceImpl final : public proto::GatewayService::Service {
 public:
-    GatewayServiceImpl(ConnectionManager* connection_manager, PacketCodec* codec, std::string gateway_id = "gateway-1");
+    GatewayServiceImpl(ConnectionManager* connection_manager,
+                       GatewayOnlineManager* online_manager,
+                       PacketCodec* codec);
 
     grpc::Status DeliverToConnection(grpc::ServerContext* context,
                                      const proto::DeliverToConnectionRequest* request,
@@ -25,8 +28,8 @@ public:
 
 private:
     ConnectionManager* connection_manager_;
+    GatewayOnlineManager* online_manager_;
     PacketCodec* codec_;
-    std::string gateway_id_;
 };
 
 }  // namespace nebula

@@ -22,6 +22,14 @@ Kafka decouples message send, fanout, offline handling, retry, and DLQ processin
 
 `MySqlConnectionPool` creates a fixed number of connections and hands them out via RAII `ConnectionGuard`. It avoids frequent connect/disconnect overhead and supports timeout waiting.
 
+## Runtime storage configuration
+
+All services load MySQL and Redis settings through `StorageConfig`. Values in the configured `nebula.conf` file are the defaults, `NEBULA_MYSQL_*` and `NEBULA_REDIS_*` override them for a deployed process, and `NEBULA_TEST_MYSQL_*` and `NEBULA_TEST_REDIS_*` have the highest priority for an isolated test process. Test-only variables must not be exported by production service units.
+
+Supported MySQL variables are `HOST`, `PORT`, `USER`, `PASSWORD`, and `DATABASE` under the corresponding prefix. Redis supports `HOST`, `PORT`, and `PASSWORD`. This single loader prevents individual services and tests from silently using different credentials.
+
+`MySqlConnection` caches `mysql_affected_rows()` and `mysql_insert_id()` immediately after the statement succeeds, before draining any additional result sets. DAO state-transition checks therefore observe the statement that was just executed instead of metadata from a later result set.
+
 ## Transaction wrapper
 
 `MySqlTransaction` starts a transaction on construction. If `commit()` is not called, the destructor rolls back automatically. MessageService uses it to commit `messages`, `conversations`, and `outbox_events` atomically.
@@ -129,7 +137,7 @@ These tests require MySQL, Redis, and Kafka from Docker Compose:
 ./build/tests/test_kafka_consumer
 ```
 
-## Interview talking points
+## Knowledge checks
 
 1. MySQL needs a connection pool because creating TCP/auth/session state per request is expensive.
 2. A pool reuses established connections and controls concurrency.

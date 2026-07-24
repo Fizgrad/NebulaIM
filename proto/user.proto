@@ -42,6 +42,19 @@ message LoginResponse {
   int64 expire_at = 4;
 }
 
+message ResumeSessionRequest {
+  string request_id = 1;
+  string token = 2;
+  string device_id = 3;
+  string platform = 4;
+  string device_name = 5;
+}
+
+message ResumeSessionResponse {
+  CommonResponse response = 1;
+  uint64 user_id = 2;
+}
+
 message ValidateTokenRequest {
   string request_id = 1;
   string token = 2;

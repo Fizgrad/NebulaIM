@@ -106,6 +106,7 @@ int main() {
     nebula::proto::ListGroupMembersRequest members_req;
     members_req.set_request_id("members");
     members_req.set_group_id(group_id);
+    members_req.set_requester_user_id(user1);
     nebula::proto::ListGroupMembersResponse members_resp;
     assert(service.ListGroupMembers(&server_context, &members_req, &members_resp).ok());
     assert(members_resp.response().code() == 0);
@@ -115,6 +116,14 @@ int main() {
         if (user.user_id() == user2) has_member = true;
     }
     assert(has_owner && has_member);
+
+    nebula::proto::ListGroupMembersRequest denied_members_req = members_req;
+    denied_members_req.set_request_id("members-denied");
+    denied_members_req.set_requester_user_id(user3);
+    nebula::proto::ListGroupMembersResponse denied_members_resp;
+    assert(service.ListGroupMembers(&server_context, &denied_members_req, &denied_members_resp).ok());
+    assert(denied_members_resp.response().code() == static_cast<int>(nebula::ErrorCode::GROUP_NOT_MEMBER));
+    assert(denied_members_resp.members().empty());
 
     nebula::proto::LeaveGroupRequest leave_member;
     leave_member.set_request_id("leave-member");

@@ -79,6 +79,11 @@ wait_gateway_rpc() {
 }
 
 case "${SERVICE}" in
+    deps)
+        wait_mysql
+        wait_redis
+        wait_kafka
+        ;;
     user|conversation|admin)
         wait_mysql
         wait_redis
@@ -124,7 +129,7 @@ case "${SERVICE}" in
         wait_device
         ;;
     *)
-        echo "usage: $0 <config> {user|relation|conversation|device|message|gateway|push|admin|all}" >&2
+        echo "usage: $0 <config> {deps|user|relation|conversation|device|message|gateway|push|admin|all}" >&2
         exit 2
         ;;
 esac

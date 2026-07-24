@@ -26,7 +26,7 @@ uint64_t createUser(nebula::UserDao* dao, const std::string& prefix) {
 int main() {
     nebula::MessageServiceContext context;
     if (!context.init("config/nebula.conf")) return nebula::tests::skip("test_message_service_integration", "MessageService dependencies are not reachable");
-    nebula::MessageServiceImpl service(context.userDao(), context.groupDao(), context.relationDao(), context.messageDao(), context.offlineMessageDao(), context.redisClient(), context.kafkaProducer(), context.messageIdGenerator(), context.messageDeduplicator(), context.options(), context.mysqlPool(), context.conversationDao(), context.messageReceiptDao(), context.outboxDao());
+    nebula::MessageServiceImpl service(context.userDao(), context.groupDao(), context.relationDao(), context.messageDao(), context.offlineMessageDao(), context.redisClient(), context.messageIdGenerator(), context.messageDeduplicator(), context.options(), context.mysqlPool(), context.conversationDao(), context.messageReceiptDao(), context.outboxDao());
     grpc::ServerContext server_context;
     uint64_t u1 = createUser(context.userDao(), "msi_u1_");
     uint64_t u2 = createUser(context.userDao(), "msi_u2_");

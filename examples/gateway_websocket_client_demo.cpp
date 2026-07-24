@@ -151,8 +151,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     std::cout << "Login code=" << login_resp.response().code()
-              << " user_id=" << login_resp.user_id()
-              << " token_prefix=" << login_resp.token().substr(0, 8) << std::endl;
+              << " user_id=" << login_resp.user_id() << std::endl;
     ::close(fd);
     return login_resp.response().code() == 0 ? 0 : 1;
 }

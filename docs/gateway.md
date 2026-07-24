@@ -88,7 +88,7 @@ Gateway does not write MySQL and does not consume Kafka. It uses the custom Pack
 ./build/tests/test_gateway_client_flow
 ```
 
-## Interview points
+## Knowledge checks
 
 1. Gateway maintains long connections and isolates client protocol from business services.
 2. It should not own business persistence.

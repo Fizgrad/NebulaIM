@@ -1,5 +1,6 @@
 #include "common/gateway/ConnectionManager.h"
 
+#include "common/net/TcpConnection.h"
 #include "common/utils/TimeUtil.h"
 
 namespace nebula {
@@ -27,7 +28,10 @@ void ConnectionManager::removeConnection(const std::string& connection_id) {
     if (it != contexts_.end() && it->second.user_id != 0) {
         auto dit = user_device_to_connection_.find(it->second.user_id);
         if (dit != user_device_to_connection_.end()) {
-            dit->second.erase(it->second.device_id);
+            auto mapped = dit->second.find(it->second.device_id);
+            if (mapped != dit->second.end() && mapped->second == connection_id) {
+                dit->second.erase(mapped);
+            }
             if (dit->second.empty()) user_device_to_connection_.erase(dit);
         }
     }
@@ -41,16 +45,36 @@ bool ConnectionManager::bindUser(const std::string& connection_id,
                                  const std::string& device_id,
                                  const std::string& platform) {
     if (user_id == 0 || device_id.empty()) return false;
-    std::lock_guard<std::mutex> lock(mutex_);
-    auto it = contexts_.find(connection_id);
-    if (it == contexts_.end()) return false;
-    it->second.user_id = user_id;
-    it->second.token = token;
-    it->second.device_id = device_id;
-    it->second.platform = platform;
-    it->second.authenticated = true;
-    it->second.last_active_ms = TimeUtil::nowMs();
-    user_device_to_connection_[user_id][it->second.device_id] = connection_id;
+    TcpConnectionPtr replaced_connection;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = contexts_.find(connection_id);
+        if (it == contexts_.end()) return false;
+        if (it->second.user_id != 0 && !it->second.device_id.empty()) {
+            auto old_user = user_device_to_connection_.find(it->second.user_id);
+            if (old_user != user_device_to_connection_.end()) {
+                auto old_device = old_user->second.find(it->second.device_id);
+                if (old_device != old_user->second.end() && old_device->second == connection_id) {
+                    old_user->second.erase(old_device);
+                }
+                if (old_user->second.empty()) user_device_to_connection_.erase(old_user);
+            }
+        }
+        auto& device_map = user_device_to_connection_[user_id];
+        auto existing = device_map.find(device_id);
+        if (existing != device_map.end() && existing->second != connection_id) {
+            auto conn_it = connections_.find(existing->second);
+            if (conn_it != connections_.end()) replaced_connection = conn_it->second;
+        }
+        it->second.user_id = user_id;
+        it->second.token = token;
+        it->second.device_id = device_id;
+        it->second.platform = platform;
+        it->second.authenticated = true;
+        it->second.last_active_ms = TimeUtil::nowMs();
+        device_map[device_id] = connection_id;
+    }
+    if (replaced_connection) replaced_connection->forceClose();
     return true;
 }
 

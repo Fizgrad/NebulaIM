@@ -20,6 +20,7 @@ Conversation parseConversation(MySqlResult& result) {
     conv.group_id = result.getUInt64("group_id");
     conv.last_message_id = result.getUInt64("last_message_id");
     conv.last_message_preview = result.getString("last_message_preview");
+    conv.group_name = result.getString("group_name");
     conv.last_message_at = result.getInt64("last_message_at");
     conv.unread_count = result.getInt("unread_count");
     conv.pinned = result.getInt("pinned") != 0;
@@ -113,8 +114,10 @@ std::vector<Conversation> ConversationDao::listConversations(uint64_t owner_user
     std::vector<Conversation> conversations;
     auto conn = pool_.acquire();
     if (!conn) return conversations;
-    auto result = conn->executeQuery("SELECT * FROM conversations WHERE owner_user_id=" + std::to_string(owner_user_id) +
-                                     " AND deleted=0 ORDER BY pinned DESC, updated_at DESC LIMIT " +
+    auto result = conn->executeQuery("SELECT c.*, COALESCE(g.group_name,'') AS group_name FROM conversations c "
+                                     "LEFT JOIN `groups` g ON g.id=c.group_id WHERE c.owner_user_id=" +
+                                     std::to_string(owner_user_id) +
+                                     " AND c.deleted=0 ORDER BY c.pinned DESC, c.updated_at DESC LIMIT " +
                                      std::to_string(limit) + " OFFSET " + std::to_string(offset));
     while (result && result->next()) conversations.push_back(parseConversation(*result));
     return conversations;
@@ -138,6 +141,51 @@ bool ConversationDao::markRead(uint64_t owner_user_id, uint64_t conversation_id)
         return false;
     }
     return conn->affectedRows() > 0;
+}
+
+bool ConversationDao::recalculateUnread(MySqlConnection& conn,
+                                        uint64_t owner_user_id,
+                                        uint64_t conversation_id,
+                                        int64_t now_ms) {
+    std::string sql =
+        "UPDATE conversations c SET c.unread_count=("
+        "SELECT COUNT(*) FROM messages m "
+        "LEFT JOIN message_receipts r ON r.message_id=m.message_id AND r.user_id=" +
+        std::to_string(owner_user_id) +
+        " WHERE m.conversation_id=" + std::to_string(conversation_id) +
+        " AND m.from_user_id<>" + std::to_string(owner_user_id) +
+        " AND m.recalled=0 AND COALESCE(r.read_at,0)=0), c.updated_at=" +
+        std::to_string(now_ms) +
+        " WHERE c.owner_user_id=" + std::to_string(owner_user_id) +
+        " AND c.conversation_id=" + std::to_string(conversation_id);
+    if (!conn.executeUpdate(sql)) return false;
+    return true;
+}
+
+bool ConversationDao::recalculateUnreadForConversation(MySqlConnection& conn,
+                                                       uint64_t conversation_id,
+                                                       int64_t now_ms) {
+    std::string sql =
+        "UPDATE conversations c SET c.unread_count=("
+        "SELECT COUNT(*) FROM messages m "
+        "LEFT JOIN message_receipts r ON r.message_id=m.message_id AND r.user_id=c.owner_user_id "
+        "WHERE m.conversation_id=c.conversation_id "
+        "AND m.from_user_id<>c.owner_user_id "
+        "AND m.recalled=0 AND COALESCE(r.read_at,0)=0), c.updated_at=" +
+        std::to_string(now_ms) +
+        " WHERE c.conversation_id=" + std::to_string(conversation_id);
+    return conn.executeUpdate(sql);
+}
+
+bool ConversationDao::markLastMessageRecalled(MySqlConnection& conn,
+                                               uint64_t conversation_id,
+                                               uint64_t message_id,
+                                               int64_t recalled_at) {
+    return conn.executeUpdate(
+        "UPDATE conversations SET last_message_preview='__NEBULA_MESSAGE_RECALLED__', last_message_at=" +
+        std::to_string(recalled_at) + ", updated_at=" + std::to_string(recalled_at) +
+        " WHERE conversation_id=" + std::to_string(conversation_id) +
+        " AND last_message_id=" + std::to_string(message_id));
 }
 
 bool ConversationDao::deleteConversation(uint64_t owner_user_id, uint64_t conversation_id) {

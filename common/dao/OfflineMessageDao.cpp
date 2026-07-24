@@ -87,21 +87,32 @@ bool OfflineMessageDao::markBatchAsPulled(uint64_t user_id, const std::vector<ui
     if (message_ids.empty()) return true;
     auto conn = pool_.acquire();
     if (!conn) return false;
+    return markBatchAsPulled(*conn, user_id, message_ids);
+}
+
+bool OfflineMessageDao::markBatchAsPulled(MySqlConnection& conn,
+                                          uint64_t user_id,
+                                          const std::vector<uint64_t>& message_ids) {
+    if (message_ids.empty()) return true;
     std::string ids;
     for (size_t i = 0; i < message_ids.size(); ++i) {
         if (i > 0) ids += ",";
         ids += std::to_string(message_ids[i]);
     }
-    return conn->executeUpdate("UPDATE offline_messages SET status=1, updated_at=UNIX_TIMESTAMP()*1000 WHERE user_id=" +
-                               std::to_string(user_id) + " AND message_id IN (" + ids + ") AND status IN (0,1)");
+    return conn.executeUpdate("UPDATE offline_messages SET status=1, updated_at=UNIX_TIMESTAMP()*1000 WHERE user_id=" +
+                              std::to_string(user_id) + " AND message_id IN (" + ids + ") AND status IN (0,1)");
 }
 
 bool OfflineMessageDao::markAsAcked(uint64_t user_id, uint64_t message_id) {
     auto conn = pool_.acquire();
     if (!conn) return false;
-    return conn->executeUpdate("UPDATE offline_messages SET status=2, updated_at=UNIX_TIMESTAMP()*1000 WHERE user_id=" +
-                               std::to_string(user_id) + " AND message_id=" + std::to_string(message_id) +
-                               " AND status IN (0,1,2)");
+    return markAsAcked(*conn, user_id, message_id);
+}
+
+bool OfflineMessageDao::markAsAcked(MySqlConnection& conn, uint64_t user_id, uint64_t message_id) {
+    return conn.executeUpdate("UPDATE offline_messages SET status=2, updated_at=UNIX_TIMESTAMP()*1000 WHERE user_id=" +
+                              std::to_string(user_id) + " AND message_id=" + std::to_string(message_id) +
+                              " AND status IN (0,1,2)");
 }
 
 bool OfflineMessageDao::deleteAckedMessages(uint64_t user_id) {

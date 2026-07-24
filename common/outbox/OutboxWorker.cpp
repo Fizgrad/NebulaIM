@@ -38,28 +38,39 @@ bool OutboxWorker::running() const {
 
 void OutboxWorker::runOnce() {
     if (outbox_dao_ == nullptr || kafka_producer_ == nullptr) return;
-    auto events = outbox_dao_->claimPendingEvents(options_.batch_size, TimeUtil::nowMs(), options_.claim_lease_ms);
-    for (const auto& event : events) {
+    for (size_t processed = 0; processed < options_.batch_size; ++processed) {
+        auto events = outbox_dao_->claimPendingEvents(1, TimeUtil::nowMs(), options_.claim_lease_ms);
+        if (events.empty()) break;
+        const auto& event = events.front();
         bool ok = kafka_producer_->produce(event.topic, event.event_key, event.payload);
         if (ok) {
-            kafka_producer_->flush(1000);
-            outbox_dao_->markPublished(event.event_id);
+            if (!outbox_dao_->markPublished(event.event_id, event.claim_token)) {
+                LOG_ERROR("outbox publish ownership lost event_id=" + std::to_string(event.event_id));
+            }
             continue;
         }
 
         int retry_count = event.retry_count + 1;
         if (retry_count > options_.max_retry_count) {
-            if (!options_.dlq_topic.empty()) {
-                kafka_producer_->produce(options_.dlq_topic, event.event_key, event.payload);
-                kafka_producer_->flush(1000);
+            bool dlq_ok = !options_.dlq_topic.empty() &&
+                          kafka_producer_->produce(options_.dlq_topic, event.event_key, event.payload);
+            if (dlq_ok) {
+                if (!outbox_dao_->markDead(event.event_id, event.claim_token)) {
+                    LOG_ERROR("outbox dead-state ownership lost event_id=" + std::to_string(event.event_id));
+                }
+                LOG_ERROR("outbox event moved to dead status event_id=" + std::to_string(event.event_id));
+            } else {
+                int64_t backoff = options_.retry_backoff_ms * retry_count;
+                outbox_dao_->markFailed(event.event_id, event.claim_token, event.retry_count,
+                                        TimeUtil::nowMs() + backoff);
+                LOG_ERROR("outbox DLQ publish failed; event retained for retry event_id=" +
+                          std::to_string(event.event_id));
             }
-            outbox_dao_->markDead(event.event_id);
-            LOG_ERROR("outbox event moved to dead status event_id=" + std::to_string(event.event_id));
             continue;
         }
 
         int64_t backoff = options_.retry_backoff_ms * retry_count;
-        outbox_dao_->markFailed(event.event_id, retry_count, TimeUtil::nowMs() + backoff);
+        outbox_dao_->markFailed(event.event_id, event.claim_token, retry_count, TimeUtil::nowMs() + backoff);
     }
 }
 

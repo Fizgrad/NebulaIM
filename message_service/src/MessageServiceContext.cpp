@@ -1,5 +1,6 @@
 #include "MessageServiceContext.h"
 
+#include "common/config/StorageConfig.h"
 #include "common/log/Logger.h"
 #include "common/rpc/InternalRpcAuth.h"
 #include "common/trace/TraceManager.h"
@@ -17,23 +18,14 @@ bool MessageServiceContext::init(const std::string& config_path) {
     InternalRpcAuth::instance().configureFromConfig(config_);
     TraceManager::instance().configure(TraceManager::configFrom(config_, "nebula-message-service"));
 
-    MySqlConfig mysql;
-    mysql.host = config_.getString("mysql.host", mysql.host);
-    mysql.port = config_.getInt("mysql.port", mysql.port);
-    mysql.user = config_.getString("mysql.user", mysql.user);
-    mysql.password = config_.getString("mysql.password", mysql.password);
-    mysql.database = config_.getString("mysql.database", mysql.database);
+    MySqlConfig mysql = loadMySqlConfig(config_);
     if (!mysql_pool_.init(mysql, static_cast<size_t>(config_.getInt("mysql.pool_size", 4)))) {
         LOG_ERROR("failed to initialize MySQL pool for MessageService");
         return false;
     }
 
     auto redis = std::make_unique<RedisClient>();
-    RedisConfig redis_config;
-    redis_config.host = config_.getString("redis.host", redis_config.host);
-    redis_config.port = config_.getInt("redis.port", redis_config.port);
-    redis_config.timeout_ms = config_.getInt("redis.timeout_ms", redis_config.timeout_ms);
-    redis_config.password = config_.getString("redis.password", redis_config.password);
+    RedisConfig redis_config = loadRedisConfig(config_);
     if (!redis->connect(redis_config)) {
         LOG_ERROR("failed to connect Redis: " + redis->lastError());
         return false;
@@ -43,6 +35,7 @@ bool MessageServiceContext::init(const std::string& config_path) {
     KafkaProducerConfig kafka_config;
     kafka_config.brokers = config_.getString("kafka.brokers", kafka_config.brokers);
     kafka_config.client_id = config_.getString("kafka.producer.client_id", "nebula-message-service");
+    kafka_config.delivery_timeout_ms = config_.getInt("kafka.producer.delivery_timeout_ms", kafka_config.delivery_timeout_ms);
     if (!kafka->init(kafka_config)) {
         LOG_ERROR("failed to initialize KafkaProducer");
         return false;
@@ -52,7 +45,6 @@ bool MessageServiceContext::init(const std::string& config_path) {
     options_.dedup_ttl_seconds = config_.getInt("message.dedup_ttl_seconds", options_.dedup_ttl_seconds);
     options_.offline_pull_limit = config_.getInt("message.offline_pull_limit", options_.offline_pull_limit);
     options_.recall_window_seconds = config_.getInt("message.recall_window_seconds", options_.recall_window_seconds);
-    options_.outbox_enabled = config_.getBool("outbox.enabled", options_.outbox_enabled);
     options_.outbox_worker_interval_ms = config_.getInt("outbox.worker_interval_ms", options_.outbox_worker_interval_ms);
     options_.outbox_batch_size = config_.getInt("outbox.batch_size", options_.outbox_batch_size);
     options_.outbox_max_retry_count = config_.getInt("outbox.max_retry_count", options_.outbox_max_retry_count);
@@ -80,17 +72,15 @@ bool MessageServiceContext::init(const std::string& config_path) {
     kafka_producer_ = std::move(kafka);
     message_id_generator_ = std::make_unique<MessageIdGenerator>(static_cast<uint16_t>(config_.getInt("message.node_id", 1)));
     message_deduplicator_ = std::make_unique<MessageDeduplicator>(redis_client_.get(), options_.dedup_ttl_seconds);
-    if (options_.outbox_enabled) {
-        OutboxWorkerOptions worker_options;
-        worker_options.worker_interval_ms = options_.outbox_worker_interval_ms;
-        worker_options.batch_size = static_cast<size_t>(options_.outbox_batch_size);
-        worker_options.max_retry_count = options_.outbox_max_retry_count;
-        worker_options.retry_backoff_ms = options_.outbox_retry_backoff_ms;
-        worker_options.claim_lease_ms = config_.getInt("outbox.claim_lease_ms", 30000);
-        worker_options.dlq_topic = options_.topic_dlq;
-        outbox_worker_ = std::make_unique<OutboxWorker>(outbox_dao_.get(), kafka_producer_.get(), worker_options);
-        outbox_worker_->start();
-    }
+    OutboxWorkerOptions worker_options;
+    worker_options.worker_interval_ms = options_.outbox_worker_interval_ms;
+    worker_options.batch_size = static_cast<size_t>(options_.outbox_batch_size);
+    worker_options.max_retry_count = options_.outbox_max_retry_count;
+    worker_options.retry_backoff_ms = options_.outbox_retry_backoff_ms;
+    worker_options.claim_lease_ms = config_.getInt("outbox.claim_lease_ms", 30000);
+    worker_options.dlq_topic = options_.topic_dlq;
+    outbox_worker_ = std::make_unique<OutboxWorker>(outbox_dao_.get(), kafka_producer_.get(), worker_options);
+    outbox_worker_->start();
     return true;
 }
 
@@ -104,7 +94,6 @@ MessageReceiptDao* MessageServiceContext::messageReceiptDao() { return message_r
 OutboxDao* MessageServiceContext::outboxDao() { return outbox_dao_.get(); }
 MySqlConnectionPool* MessageServiceContext::mysqlPool() { return &mysql_pool_; }
 RedisClient* MessageServiceContext::redisClient() { return redis_client_.get(); }
-KafkaProducer* MessageServiceContext::kafkaProducer() { return kafka_producer_.get(); }
 MessageIdGenerator* MessageServiceContext::messageIdGenerator() { return message_id_generator_.get(); }
 MessageDeduplicator* MessageServiceContext::messageDeduplicator() { return message_deduplicator_.get(); }
 const MessageServiceOptions& MessageServiceContext::options() const { return options_; }

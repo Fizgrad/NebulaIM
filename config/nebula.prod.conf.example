@@ -66,7 +66,6 @@ message.dedup_ttl_seconds=86400
 message.offline_pull_limit=100
 message.recall_window_seconds=120
 
-outbox.enabled=true
 outbox.worker_interval_ms=1000
 outbox.batch_size=100
 outbox.max_retry_count=5
@@ -85,6 +84,8 @@ rate_limit.enabled=true
 rate_limit.login_per_minute=20
 rate_limit.message_per_second=10
 rate_limit.connection_packet_per_second=50
+rate_limit.max_bucket_count=100000
+rate_limit.bucket_idle_seconds=600
 
 circuit_breaker.failure_threshold=5
 circuit_breaker.open_timeout_ms=30000
@@ -143,6 +144,7 @@ redis.password=CHANGE_ME_REDIS_PASSWORD
 
 kafka.brokers=127.0.0.1:9092
 kafka.producer.client_id=nebula-message-service
+kafka.producer.delivery_timeout_ms=5000
 kafka.consumer.group_id=nebula-consumer
 kafka.consumer.client_id=nebula-consumer-client
 kafka.consumer.auto_offset_reset=earliest

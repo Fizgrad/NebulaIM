@@ -5,7 +5,7 @@
 
 int main() {
     nebula::FriendRequest request;
-    request.request_id = 1;
+    request.id = 1;
     request.from_user_id = 100;
     request.to_user_id = 200;
     request.status = static_cast<int>(nebula::FriendRequestStatus::PENDING);

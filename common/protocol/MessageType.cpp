@@ -14,6 +14,10 @@ std::string messageTypeToString(MessageType type) {
             return "REGISTER_REQ";
         case MessageType::REGISTER_RESP:
             return "REGISTER_RESP";
+        case MessageType::RESUME_SESSION_REQ:
+            return "RESUME_SESSION_REQ";
+        case MessageType::RESUME_SESSION_RESP:
+            return "RESUME_SESSION_RESP";
         case MessageType::HEARTBEAT_REQ:
             return "HEARTBEAT_REQ";
         case MessageType::HEARTBEAT_RESP:
@@ -52,6 +56,8 @@ MessageType messageTypeFromUint16(uint16_t type) {
         case MessageType::LOGIN_RESP:
         case MessageType::REGISTER_REQ:
         case MessageType::REGISTER_RESP:
+        case MessageType::RESUME_SESSION_REQ:
+        case MessageType::RESUME_SESSION_RESP:
         case MessageType::HEARTBEAT_REQ:
         case MessageType::HEARTBEAT_RESP:
         case MessageType::SEND_SINGLE_MSG_REQ:

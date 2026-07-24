@@ -34,6 +34,7 @@ void fillConversation(proto::ConversationInfo* info, const Conversation& conv) {
     info->set_muted(conv.muted);
     info->set_deleted(conv.deleted);
     info->set_updated_at(conv.updated_at);
+    info->set_group_name(conv.group_name);
 }
 
 }  // namespace
@@ -53,14 +54,6 @@ grpc::Status ConversationServiceImpl::ListConversations(grpc::ServerContext* con
     response->mutable_page()->set_page_size(static_cast<uint32_t>(page_size));
     response->mutable_page()->set_total(response->conversations_size());
     fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
-    return grpc::Status::OK;
-}
-
-grpc::Status ConversationServiceImpl::MarkConversationRead(grpc::ServerContext* context, const proto::ConversationMarkReadRequest* request, proto::CommonResponse* response) {
-    if (!requireInternalRpc(context, request->request_id(), response)) return grpc::Status::OK;
-    if (conversation_dao_ == nullptr) { fillResponse(response, request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
-    bool ok = conversation_dao_->markRead(request->user_id(), request->conversation_id());
-    fillResponse(response, request->request_id(), ok ? ErrorCode::OK : ErrorCode::CONVERSATION_NOT_FOUND, ok ? "OK" : "");
     return grpc::Status::OK;
 }
 

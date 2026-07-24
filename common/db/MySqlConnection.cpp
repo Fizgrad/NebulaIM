@@ -10,7 +10,9 @@ namespace nebula {
 
 MySqlConnection::MySqlConnection()
     : mysql_(nullptr),
-      connected_(false) {}
+      connected_(false),
+      affected_rows_(0),
+      last_insert_id_(0) {}
 
 MySqlConnection::~MySqlConnection() {
     close();
@@ -44,6 +46,8 @@ bool MySqlConnection::connect(const MySqlConfig& config) {
 
     mysql_ = mysql;
     connected_ = true;
+    affected_rows_ = 0;
+    last_insert_id_ = 0;
     return true;
 }
 
@@ -53,6 +57,8 @@ void MySqlConnection::close() {
         mysql_ = nullptr;
     }
     connected_ = false;
+    affected_rows_ = 0;
+    last_insert_id_ = 0;
 }
 
 bool MySqlConnection::reconnect() {
@@ -75,6 +81,8 @@ bool MySqlConnection::ping() {
 }
 
 bool MySqlConnection::executeUpdate(const std::string& sql) {
+    affected_rows_ = 0;
+    last_insert_id_ = 0;
     if (!connected_) {
         last_error_ = "MySQL connection is not connected";
         return false;
@@ -82,10 +90,13 @@ bool MySqlConnection::executeUpdate(const std::string& sql) {
     if (mysql_query(static_cast<MYSQL*>(mysql_), sql.c_str()) != 0) {
         last_error_ = mysql_error(static_cast<MYSQL*>(mysql_));
         unsigned int error_code = mysql_errno(static_cast<MYSQL*>(mysql_));
-        LOG_ERROR("MySQL update failed: " + last_error_ + " sql=" + sql);
+        LOG_ERROR("MySQL update failed: " + last_error_);
         markDisconnectedIfNeeded(error_code);
         return false;
     }
+    const my_ulonglong affected = mysql_affected_rows(static_cast<MYSQL*>(mysql_));
+    affected_rows_ = affected == static_cast<my_ulonglong>(-1) ? 0 : static_cast<uint64_t>(affected);
+    last_insert_id_ = mysql_insert_id(static_cast<MYSQL*>(mysql_));
     do {
         MYSQL_RES* result = mysql_store_result(static_cast<MYSQL*>(mysql_));
         if (result != nullptr) {
@@ -96,6 +107,8 @@ bool MySqlConnection::executeUpdate(const std::string& sql) {
 }
 
 std::unique_ptr<MySqlResult> MySqlConnection::executeQuery(const std::string& sql) {
+    affected_rows_ = 0;
+    last_insert_id_ = 0;
     if (!connected_) {
         last_error_ = "MySQL connection is not connected";
         return nullptr;
@@ -103,7 +116,7 @@ std::unique_ptr<MySqlResult> MySqlConnection::executeQuery(const std::string& sq
     if (mysql_query(static_cast<MYSQL*>(mysql_), sql.c_str()) != 0) {
         last_error_ = mysql_error(static_cast<MYSQL*>(mysql_));
         unsigned int error_code = mysql_errno(static_cast<MYSQL*>(mysql_));
-        LOG_ERROR("MySQL query failed: " + last_error_ + " sql=" + sql);
+        LOG_ERROR("MySQL query failed: " + last_error_);
         markDisconnectedIfNeeded(error_code);
         return nullptr;
     }
@@ -119,18 +132,11 @@ std::unique_ptr<MySqlResult> MySqlConnection::executeQuery(const std::string& sq
 }
 
 uint64_t MySqlConnection::lastInsertId() const {
-    if (mysql_ == nullptr) {
-        return 0;
-    }
-    return mysql_insert_id(static_cast<MYSQL*>(mysql_));
+    return last_insert_id_;
 }
 
 uint64_t MySqlConnection::affectedRows() const {
-    if (mysql_ == nullptr) {
-        return 0;
-    }
-    my_ulonglong rows = mysql_affected_rows(static_cast<MYSQL*>(mysql_));
-    return rows == static_cast<my_ulonglong>(-1) ? 0 : static_cast<uint64_t>(rows);
+    return affected_rows_;
 }
 
 bool MySqlConnection::beginTransaction() {

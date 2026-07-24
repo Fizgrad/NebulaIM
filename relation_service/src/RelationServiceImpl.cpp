@@ -10,7 +10,6 @@
 #include "common/utils/TimeUtil.h"
 
 #include <algorithm>
-#include <atomic>
 
 namespace nebula {
 
@@ -37,13 +36,22 @@ void fillUser(proto::UserInfo* info, const User& user) {
 }
 
 void fillFriendRequest(proto::FriendRequestInfo* info, const FriendRequest& request) {
-    info->set_friend_request_id(request.request_id);
+    info->set_friend_request_id(request.id);
     info->set_from_user_id(request.from_user_id);
     info->set_to_user_id(request.to_user_id);
     info->set_message(request.message);
     info->set_status(request.status);
     info->set_created_at(request.created_at);
     info->set_updated_at(request.updated_at);
+}
+
+void fillGroup(proto::GroupInfo* info, const Group& group) {
+    info->set_group_id(group.id);
+    info->set_name(group.group_name);
+    info->set_owner_id(group.owner_id);
+    info->set_member_count(group.member_count);
+    info->set_created_at(group.created_at);
+    info->set_updated_at(group.updated_at);
 }
 
 bool invalidDeps(UserDao* user_dao, RelationDao* relation_dao, GroupDao* group_dao) {
@@ -96,18 +104,22 @@ grpc::Status RelationServiceImpl::SendFriendRequest(grpc::ServerContext* context
     if (!user_dao_->getUserById(request->from_user_id()).has_value() || !user_dao_->getUserById(request->to_user_id()).has_value()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::USER_NOT_FOUND); return grpc::Status::OK; }
     if (relation_dao_->isFriend(request->from_user_id(), request->to_user_id())) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::FRIEND_ALREADY_EXISTS); return grpc::Status::OK; }
 
-    static std::atomic<uint64_t> seq{1};
     int64_t now = TimeUtil::nowMs();
     FriendRequest item;
-    item.request_id = static_cast<uint64_t>(now) * 1000 + (seq.fetch_add(1, std::memory_order_relaxed) % 1000);
     item.from_user_id = request->from_user_id();
     item.to_user_id = request->to_user_id();
     item.message = request->message().substr(0, 255);
     item.status = static_cast<int>(FriendRequestStatus::PENDING);
     item.created_at = now;
     item.updated_at = now;
-    if (!friend_request_dao_->createRequest(item)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::FRIEND_REQUEST_ALREADY_EXISTS); return grpc::Status::OK; }
-    response->set_friend_request_id(item.request_id);
+    if (!friend_request_dao_->createRequest(&item)) {
+        fillResponse(response->mutable_response(), request->request_id(),
+                     friend_request_dao_->hasPendingBetween(request->from_user_id(), request->to_user_id())
+                         ? ErrorCode::FRIEND_REQUEST_ALREADY_EXISTS
+                         : ErrorCode::DB_ERROR);
+        return grpc::Status::OK;
+    }
+    response->set_friend_request_id(item.id);
     fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
     return grpc::Status::OK;
 }
@@ -200,11 +212,65 @@ grpc::Status RelationServiceImpl::ListGroupMembers(grpc::ServerContext* context,
     LOG_INFO("ListGroupMembers request_id=" + request->request_id() + " group_id=" + std::to_string(request->group_id()));
     if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     if (invalidDeps(user_dao_, relation_dao_, group_dao_)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
-    if (request->group_id() == 0) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
+    if (request->group_id() == 0 || request->requester_user_id() == 0) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
     if (!group_dao_->getGroupById(request->group_id()).has_value()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::GROUP_NOT_FOUND); return grpc::Status::OK; }
+    if (!group_dao_->isMember(request->group_id(), request->requester_user_id())) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::GROUP_NOT_MEMBER);
+        return grpc::Status::OK;
+    }
     for (uint64_t user_id : group_dao_->listMembers(request->group_id())) {
         auto user = user_dao_->getUserById(user_id);
         if (user.has_value()) fillUser(response->add_members(), user.value());
+    }
+    fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
+    return grpc::Status::OK;
+}
+
+grpc::Status RelationServiceImpl::GetGroup(grpc::ServerContext* context,
+                                           const proto::GetGroupRequest* request,
+                                           proto::GetGroupResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
+    if (group_dao_ == nullptr || request->group_id() == 0) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT);
+        return grpc::Status::OK;
+    }
+    auto group = group_dao_->getGroupById(request->group_id());
+    if (!group.has_value()) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::GROUP_NOT_FOUND);
+        return grpc::Status::OK;
+    }
+    fillGroup(response->mutable_group(), *group);
+    fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
+    return grpc::Status::OK;
+}
+
+grpc::Status RelationServiceImpl::ListGroups(grpc::ServerContext* context,
+                                             const proto::ListGroupsRequest* request,
+                                             proto::ListGroupsResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
+    if (group_dao_ == nullptr || request->user_id() == 0) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT);
+        return grpc::Status::OK;
+    }
+    size_t limit = request->limit() == 0 ? 100 : request->limit();
+    for (const auto& group : group_dao_->listGroupsForUser(request->user_id(), limit)) {
+        fillGroup(response->add_groups(), group);
+    }
+    fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
+    return grpc::Status::OK;
+}
+
+grpc::Status RelationServiceImpl::SearchGroups(grpc::ServerContext* context,
+                                               const proto::SearchGroupsRequest* request,
+                                               proto::ListGroupsResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
+    if (group_dao_ == nullptr || request->query().empty() || request->query().size() > 128) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT);
+        return grpc::Status::OK;
+    }
+    size_t limit = request->limit() == 0 ? 12 : request->limit();
+    for (const auto& group : group_dao_->searchGroups(request->query(), limit)) {
+        fillGroup(response->add_groups(), group);
     }
     fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
     return grpc::Status::OK;

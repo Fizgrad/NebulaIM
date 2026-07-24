@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
     }
 
     nebula::MessageServiceImpl service(context.userDao(), context.groupDao(), context.relationDao(), context.messageDao(),
-                                       context.offlineMessageDao(), context.redisClient(), context.kafkaProducer(),
+                                       context.offlineMessageDao(), context.redisClient(),
                                        context.messageIdGenerator(), context.messageDeduplicator(), context.options(),
                                        context.mysqlPool(), context.conversationDao(), context.messageReceiptDao(), context.outboxDao());
 

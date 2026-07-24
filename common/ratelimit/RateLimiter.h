@@ -2,6 +2,7 @@
 
 #include "common/ratelimit/TokenBucket.h"
 
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -14,6 +15,8 @@ struct RateLimitConfig {
     size_t login_per_minute = 20;
     size_t message_per_second = 10;
     size_t connection_packet_per_second = 50;
+    size_t max_bucket_count = 100000;
+    size_t bucket_idle_seconds = 600;
 };
 
 class RateLimiter {
@@ -27,11 +30,18 @@ public:
 
 private:
     bool allow(const std::string& key, size_t capacity, double refill_rate_per_sec);
+    void pruneLocked(std::chrono::steady_clock::time_point now);
+
+    struct BucketEntry {
+        std::shared_ptr<TokenBucket> bucket;
+        std::chrono::steady_clock::time_point last_used;
+    };
 
 private:
     RateLimitConfig config_;
     std::mutex mutex_;
-    std::unordered_map<std::string, std::unique_ptr<TokenBucket>> buckets_;
+    std::unordered_map<std::string, BucketEntry> buckets_;
+    size_t operation_count_ = 0;
 };
 
 }  // namespace nebula

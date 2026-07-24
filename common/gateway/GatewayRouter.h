@@ -36,6 +36,7 @@ private:
 
     void handleRegister(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet);
     void handleLogin(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet);
+    void handleResumeSession(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet);
     void handleHeartbeat(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet);
     void handleSendSingleMessage(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet);
     void handleSendGroupMessage(const TcpConnectionPtr& conn, const std::string& connection_id, const Packet& packet);

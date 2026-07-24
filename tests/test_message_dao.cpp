@@ -25,13 +25,22 @@ int main() {
 
     nebula::MessageDao dao(pool);
     assert(dao.insertMessage(msg));
+    nebula::MessageRecord same_timestamp = msg;
+    same_timestamp.message_id += 1;
+    same_timestamp.content = "same timestamp";
+    assert(dao.insertMessage(same_timestamp));
 
     auto loaded = dao.getMessageById(msg.message_id);
     assert(loaded.has_value());
     assert(loaded->content == msg.content);
 
-    auto list = dao.listConversationMessages(msg.conversation_id, now + 1000, 10);
-    assert(!list.empty());
+    auto list = dao.listConversationMessages(msg.conversation_id, 0, 0, 1);
+    assert(list.size() == 1);
+    assert(list.front().message_id == same_timestamp.message_id);
+    auto older = dao.listConversationMessages(
+        msg.conversation_id, list.front().created_at, list.front().message_id, 1);
+    assert(older.size() == 1);
+    assert(older.front().message_id == msg.message_id);
 
     assert(dao.updateMessageStatus(msg.message_id, 3));
     loaded = dao.getMessageById(msg.message_id);

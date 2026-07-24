@@ -12,6 +12,18 @@ logs/
 
 # Runtime
 run/
+.env
+.env.*
+!.env.example
+backups/
+*.sql.gz
+
+# Credentials
+*.key
+*.pem
+*.p12
+*.pfx
+credentials/
 
 # CMake generated
 CMakeCache.txt

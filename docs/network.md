@@ -89,7 +89,7 @@ Expected response:
 hello
 ```
 
-## Interview talking points
+## Knowledge checks
 
 1. One thread per connection wastes stack memory, causes excessive context switches, and does not scale for IM long connections.
 2. Reactor waits for IO readiness and dispatches callbacks without blocking worker threads on each fd.

@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
         nebula::MetricsRegistry::instance().gauge("nebula_gateway_rpc_task_failed_total", "Gateway failed RPC tasks").set(static_cast<double>(executor->failedTasks()));
     });
 
-    nebula::GatewayServiceImpl rpc_service(context.connectionManager(), context.codec(), options.gateway_id);
+    nebula::GatewayServiceImpl rpc_service(context.connectionManager(), context.onlineManager(), context.codec());
     auto credentials = nebula::GrpcTlsCredentials::serverCredentials(context.grpcTlsConfig());
     if (!credentials) {
         LOG_ERROR("failed to initialize Gateway RPC credentials");

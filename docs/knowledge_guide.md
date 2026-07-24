@@ -1,4 +1,4 @@
-# Interview Guide
+# Engineering Knowledge Guide
 
 NebulaIM is a C++17 distributed IM system with custom epoll/Reactor networking, binary TCP protocol, gRPC services, MySQL, Redis, Kafka, Prometheus/Grafana, and benchmark tooling.
 

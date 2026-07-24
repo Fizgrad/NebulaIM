@@ -166,6 +166,10 @@ check_tcp admin-service "$(get_cfg admin_service.host 127.0.0.1)" "$(get_cfg adm
 
 if command -v systemctl >/dev/null 2>&1; then
     for unit in nebula-user nebula-relation nebula-conversation nebula-message nebula-gateway nebula-device nebula-push nebula-admin; do
+        load_state="$(systemctl show --property=LoadState --value "${unit}.service" 2>/dev/null || true)"
+        if [[ -z "${load_state}" || "${load_state}" == "not-found" ]]; then
+            continue
+        fi
         if systemctl is-active --quiet "${unit}.service"; then
             echo "[health][OK] ${unit}.service active"
         else

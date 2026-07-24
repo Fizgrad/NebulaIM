@@ -13,7 +13,6 @@ public:
                        MessageDao* message_dao,
                        OfflineMessageDao* offline_message_dao,
                        RedisClient* redis_client,
-                       KafkaProducer* kafka_producer,
                        MessageIdGenerator* message_id_generator,
                        MessageDeduplicator* message_deduplicator,
                        MessageServiceOptions options,
@@ -29,6 +28,10 @@ public:
     grpc::Status SendGroupMessage(grpc::ServerContext* context,
                                   const proto::SendGroupMessageRequest* request,
                                   proto::SendGroupMessageResponse* response) override;
+
+    grpc::Status ListConversationMessages(grpc::ServerContext* context,
+                                          const proto::ListConversationMessagesRequest* request,
+                                          proto::ListConversationMessagesResponse* response) override;
 
     grpc::Status AckMessage(grpc::ServerContext* context,
                             const proto::AckMessageRequest* request,
@@ -67,7 +70,6 @@ private:
     MessageDao* message_dao_;
     OfflineMessageDao* offline_message_dao_;
     RedisClient* redis_client_;
-    KafkaProducer* kafka_producer_;
     MessageIdGenerator* message_id_generator_;
     MessageDeduplicator* message_deduplicator_;
     MySqlConnectionPool* mysql_pool_;

@@ -4,11 +4,18 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 
 namespace nebula {
 
 class RedisClient;
+
+struct GatewayOnlineLocation {
+    std::string gateway_id;
+    std::string connection_id;
+    std::string device_id;
+};
 
 class GatewayOnlineManager {
 public:
@@ -18,6 +25,7 @@ public:
     bool setOnline(uint64_t user_id, const std::string& device_id, const std::string& connection_id);
     bool refreshOnline(uint64_t user_id, const std::string& device_id, const std::string& connection_id);
     bool setOffline(uint64_t user_id, const std::string& device_id, const std::string& connection_id);
+    std::optional<GatewayOnlineLocation> findOnline(uint64_t user_id);
     void refreshOnlineAsync(uint64_t user_id, std::string device_id, std::string connection_id);
     void setOfflineAsync(uint64_t user_id, std::string device_id, std::string connection_id);
 

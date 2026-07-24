@@ -4,7 +4,7 @@ Passwords are hashed before storage. Token values live in Redis with TTL and can
 
 Message size is bounded by protocol body length and message content length. WebSocket frame parsing validates mask rules, length encoding, opcodes, and rejects unsupported fragmentation. Browser clients must use binary frames containing NebulaIM Packet bytes; JSON/text frames are not accepted by Gateway.
 
-Logs should avoid full token output; existing code logs short token prefixes. Production deployments should also mask user-provided message payloads in high-volume logs.
+Logs do not include bearer tokens or token prefixes. User-provided message payloads are also excluded from operational error logs.
 
 Rate limiting protects login, per-user message sending, and per-connection packet throughput. Circuit breakers protect Gateway and PushService from repeatedly calling unhealthy downstream services.
 

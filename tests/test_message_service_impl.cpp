@@ -4,6 +4,7 @@
 #include "common/auth/PasswordHasher.h"
 #include "common/dao/GroupDao.h"
 #include "common/dao/MessageDao.h"
+#include "common/dao/MessageReceiptDao.h"
 #include "common/dao/OfflineMessageDao.h"
 #include "common/dao/RelationDao.h"
 #include "common/dao/UserDao.h"
@@ -34,7 +35,7 @@ int main() {
     const char* config_path = std::getenv("NEBULA_CONFIG");
     nebula::MessageServiceContext context;
     if (!context.init(config_path != nullptr ? config_path : "config/nebula.conf")) return nebula::tests::skip("test_message_service_impl", "MessageService dependencies are not reachable");
-    nebula::MessageServiceImpl service(context.userDao(), context.groupDao(), context.relationDao(), context.messageDao(), context.offlineMessageDao(), context.redisClient(), context.kafkaProducer(), context.messageIdGenerator(), context.messageDeduplicator(), context.options(), context.mysqlPool(), context.conversationDao(), context.messageReceiptDao(), context.outboxDao());
+    nebula::MessageServiceImpl service(context.userDao(), context.groupDao(), context.relationDao(), context.messageDao(), context.offlineMessageDao(), context.redisClient(), context.messageIdGenerator(), context.messageDeduplicator(), context.options(), context.mysqlPool(), context.conversationDao(), context.messageReceiptDao(), context.outboxDao());
     grpc::ServerContext server_context;
 
     uint64_t user1 = createUser(context.userDao(), "msg_u1_");
@@ -111,7 +112,15 @@ int main() {
     nebula::proto::AckMessageResponse ack_resp;
     assert(service.AckMessage(&server_context, &ack, &ack_resp).ok());
     assert(ack_resp.response().code() == 0);
-    assert(context.messageDao()->getMessageById(single_resp.message_id())->status == nebula::proto::MESSAGE_STATUS_ACKED);
+    assert(context.messageDao()->getMessageById(single_resp.message_id())->status == nebula::proto::MESSAGE_STATUS_SENT);
+    const auto receipt_states = context.messageReceiptDao()->getReadState(single_resp.message_id());
+    bool delivered_to_recipient = false;
+    for (const auto& state : receipt_states) {
+        if (state.user_id == user2 && state.delivered_at > 0 && state.read_at == 0) {
+            delivered_to_recipient = true;
+        }
+    }
+    assert(delivered_to_recipient);
 
     nebula::proto::AckMessageRequest unauthorized_ack = ack;
     unauthorized_ack.set_request_id("ack-denied");

@@ -59,6 +59,10 @@ PushResult PushDispatcher::pushToGroup(const std::string& request_id, uint64_t g
     PushResult result;
     if (group_id == 0 || group_dao_ == nullptr) { result.failed_count = 1; return result; }
     auto members = group_dao_->listMembers(group_id);
+    if (members.empty()) {
+        result.failed_count = 1;
+        return result;
+    }
     for (uint64_t user_id : members) {
         if (options_.skip_sender_for_group && user_id == message.from_user_id()) continue;
         if (pushToUser(request_id, user_id, message)) ++result.success_count;

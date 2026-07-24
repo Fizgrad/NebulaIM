@@ -26,7 +26,7 @@
 #include "common/trace/TraceSpan.h"
 #include "common/utils/TimeUtil.h"
 
-#include <atomic>
+#include <algorithm>
 
 namespace nebula {
 
@@ -88,7 +88,6 @@ MessageServiceImpl::MessageServiceImpl(UserDao* user_dao,
                                        MessageDao* message_dao,
                                        OfflineMessageDao* offline_message_dao,
                                        RedisClient* redis_client,
-                                       KafkaProducer* kafka_producer,
                                        MessageIdGenerator* message_id_generator,
                                        MessageDeduplicator* message_deduplicator,
                                        MessageServiceOptions options,
@@ -97,14 +96,14 @@ MessageServiceImpl::MessageServiceImpl(UserDao* user_dao,
                                        MessageReceiptDao* message_receipt_dao,
                                        OutboxDao* outbox_dao)
     : user_dao_(user_dao), group_dao_(group_dao), relation_dao_(relation_dao), message_dao_(message_dao), offline_message_dao_(offline_message_dao),
-      redis_client_(redis_client), kafka_producer_(kafka_producer), message_id_generator_(message_id_generator),
+      redis_client_(redis_client), message_id_generator_(message_id_generator),
       message_deduplicator_(message_deduplicator), mysql_pool_(mysql_pool), conversation_dao_(conversation_dao),
       message_receipt_dao_(message_receipt_dao), outbox_dao_(outbox_dao), options_(std::move(options)) {}
 
 bool MessageServiceImpl::invalidDeps() const {
     return user_dao_ == nullptr || group_dao_ == nullptr || relation_dao_ == nullptr || message_dao_ == nullptr || offline_message_dao_ == nullptr ||
-           redis_client_ == nullptr || kafka_producer_ == nullptr || message_id_generator_ == nullptr || message_deduplicator_ == nullptr ||
-           mysql_pool_ == nullptr || conversation_dao_ == nullptr;
+           redis_client_ == nullptr || message_id_generator_ == nullptr || message_deduplicator_ == nullptr ||
+           mysql_pool_ == nullptr || conversation_dao_ == nullptr || message_receipt_dao_ == nullptr || outbox_dao_ == nullptr;
 }
 
 bool MessageServiceImpl::validateContent(const std::string& request_id, const std::string& content, proto::CommonResponse* response) const {
@@ -151,10 +150,21 @@ grpc::Status MessageServiceImpl::SendSingleMessage(grpc::ServerContext* context,
     }
     if (request->client_sequence_id() != 0) {
         auto existing = message_deduplicator_->getExistingMessageId(request->from_user_id(), request->client_sequence_id());
+        std::optional<MessageRecord> persisted;
         if (existing.has_value()) {
+            persisted = message_dao_->getMessageById(existing.value());
+            if (!persisted.has_value() || persisted->from_user_id != request->from_user_id() ||
+                persisted->client_sequence_id != request->client_sequence_id()) {
+                persisted.reset();
+            }
+        }
+        if (!persisted.has_value()) {
+            persisted = message_dao_->getMessageByClientSequence(request->from_user_id(), request->client_sequence_id());
+        }
+        if (persisted.has_value()) {
             fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "DUPLICATED_REQUEST_REPLAYED");
-            response->set_message_id(existing.value());
-            response->set_server_timestamp(TimeUtil::nowMs());
+            response->set_message_id(persisted->message_id);
+            response->set_server_timestamp(persisted->created_at);
             return grpc::Status::OK;
         }
     }
@@ -165,6 +175,7 @@ grpc::Status MessageServiceImpl::SendSingleMessage(grpc::ServerContext* context,
     record.message_id = message_id;
     record.conversation_id = conversation_id;
     record.from_user_id = request->from_user_id();
+    record.client_sequence_id = request->client_sequence_id();
     record.to_user_id = request->to_user_id();
     record.message_type = static_cast<int>(request->content_type());
     record.content = request->content();
@@ -173,29 +184,30 @@ grpc::Status MessageServiceImpl::SendSingleMessage(grpc::ServerContext* context,
     record.updated_at = now;
     std::string payload = MessageKafkaPayload::serializeMessageData(toMessageData(record));
 
-    if (options_.outbox_enabled && outbox_dao_ == nullptr) {
-        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OUTBOX_PUBLISH_FAILED, "outbox is enabled but not configured");
-        return grpc::Status::OK;
-    }
     {
         auto conn = mysql_pool_->acquire();
         if (!conn) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
         MySqlTransaction tx(*conn);
         if (!tx.active()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
-        if (!message_dao_->insertMessage(*conn, record)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::MESSAGE_PERSIST_FAILED); return grpc::Status::OK; }
+        if (!message_dao_->insertMessage(*conn, record)) {
+            tx.rollback();
+            auto existing = message_dao_->getMessageByClientSequence(request->from_user_id(), request->client_sequence_id());
+            if (existing.has_value()) {
+                fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "DUPLICATED_REQUEST_REPLAYED");
+                response->set_message_id(existing->message_id);
+                response->set_server_timestamp(existing->created_at);
+                return grpc::Status::OK;
+            }
+            fillResponse(response->mutable_response(), request->request_id(), ErrorCode::MESSAGE_PERSIST_FAILED);
+            return grpc::Status::OK;
+        }
         if (!conversation_dao_->upsertSingleConversationForUsers(*conn, conversation_id, request->from_user_id(), request->to_user_id(), message_id, ConversationServiceHelper::buildPreview(request->content()), now)) {
             fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR);
             return grpc::Status::OK;
         }
-        if (options_.outbox_enabled) {
-            auto event = makeOutboxEvent(message_id, "message", message_id, options_.topic_single, std::to_string(conversation_id), payload, now);
-            if (!outbox_dao_->insertEvent(*conn, event)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OUTBOX_PUBLISH_FAILED); return grpc::Status::OK; }
-        }
+        auto event = makeOutboxEvent(message_id, "message", message_id, options_.topic_single, std::to_string(conversation_id), payload, now);
+        if (!outbox_dao_->insertEvent(*conn, event)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OUTBOX_PUBLISH_FAILED); return grpc::Status::OK; }
         if (!tx.commit()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
-    }
-    if (!options_.outbox_enabled) {
-        if (!kafka_producer_->produce(options_.topic_single, std::to_string(conversation_id), payload)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::MESSAGE_KAFKA_FAILED); return grpc::Status::OK; }
-        kafka_producer_->flush(5000);
     }
     if (request->client_sequence_id() != 0 && !message_deduplicator_->markMessage(request->from_user_id(), request->client_sequence_id(), message_id)) {
         LOG_WARN("message dedup mark failed after single message commit request_id=" + request->request_id() +
@@ -229,10 +241,21 @@ grpc::Status MessageServiceImpl::SendGroupMessage(grpc::ServerContext* context, 
     auto members = group_dao_->listMembers(request->group_id());
     if (request->client_sequence_id() != 0) {
         auto existing = message_deduplicator_->getExistingMessageId(request->from_user_id(), request->client_sequence_id());
+        std::optional<MessageRecord> persisted;
         if (existing.has_value()) {
+            persisted = message_dao_->getMessageById(existing.value());
+            if (!persisted.has_value() || persisted->from_user_id != request->from_user_id() ||
+                persisted->client_sequence_id != request->client_sequence_id()) {
+                persisted.reset();
+            }
+        }
+        if (!persisted.has_value()) {
+            persisted = message_dao_->getMessageByClientSequence(request->from_user_id(), request->client_sequence_id());
+        }
+        if (persisted.has_value()) {
             fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "DUPLICATED_REQUEST_REPLAYED");
-            response->set_message_id(existing.value());
-            response->set_server_timestamp(TimeUtil::nowMs());
+            response->set_message_id(persisted->message_id);
+            response->set_server_timestamp(persisted->created_at);
             return grpc::Status::OK;
         }
     }
@@ -243,6 +266,7 @@ grpc::Status MessageServiceImpl::SendGroupMessage(grpc::ServerContext* context, 
     record.message_id = message_id;
     record.conversation_id = conversation_id;
     record.from_user_id = request->from_user_id();
+    record.client_sequence_id = request->client_sequence_id();
     record.group_id = request->group_id();
     record.message_type = static_cast<int>(request->content_type());
     record.content = request->content();
@@ -251,29 +275,30 @@ grpc::Status MessageServiceImpl::SendGroupMessage(grpc::ServerContext* context, 
     record.updated_at = now;
     std::string payload = MessageKafkaPayload::serializeMessageData(toMessageData(record));
 
-    if (options_.outbox_enabled && outbox_dao_ == nullptr) {
-        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OUTBOX_PUBLISH_FAILED, "outbox is enabled but not configured");
-        return grpc::Status::OK;
-    }
     {
         auto conn = mysql_pool_->acquire();
         if (!conn) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
         MySqlTransaction tx(*conn);
         if (!tx.active()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
-        if (!message_dao_->insertMessage(*conn, record)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::MESSAGE_PERSIST_FAILED); return grpc::Status::OK; }
+        if (!message_dao_->insertMessage(*conn, record)) {
+            tx.rollback();
+            auto existing = message_dao_->getMessageByClientSequence(request->from_user_id(), request->client_sequence_id());
+            if (existing.has_value()) {
+                fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "DUPLICATED_REQUEST_REPLAYED");
+                response->set_message_id(existing->message_id);
+                response->set_server_timestamp(existing->created_at);
+                return grpc::Status::OK;
+            }
+            fillResponse(response->mutable_response(), request->request_id(), ErrorCode::MESSAGE_PERSIST_FAILED);
+            return grpc::Status::OK;
+        }
         if (!conversation_dao_->upsertGroupConversationForMembers(*conn, conversation_id, request->group_id(), request->from_user_id(), members, message_id, ConversationServiceHelper::buildPreview(request->content()), now)) {
             fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR);
             return grpc::Status::OK;
         }
-        if (options_.outbox_enabled) {
-            auto event = makeOutboxEvent(message_id, "message", message_id, options_.topic_group, std::to_string(conversation_id), payload, now);
-            if (!outbox_dao_->insertEvent(*conn, event)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OUTBOX_PUBLISH_FAILED); return grpc::Status::OK; }
-        }
+        auto event = makeOutboxEvent(message_id, "message", message_id, options_.topic_group, std::to_string(conversation_id), payload, now);
+        if (!outbox_dao_->insertEvent(*conn, event)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OUTBOX_PUBLISH_FAILED); return grpc::Status::OK; }
         if (!tx.commit()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
-    }
-    if (!options_.outbox_enabled) {
-        if (!kafka_producer_->produce(options_.topic_group, std::to_string(conversation_id), payload)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::MESSAGE_KAFKA_FAILED); return grpc::Status::OK; }
-        kafka_producer_->flush(5000);
     }
     if (request->client_sequence_id() != 0 && !message_deduplicator_->markMessage(request->from_user_id(), request->client_sequence_id(), message_id)) {
         LOG_WARN("message dedup mark failed after group message commit request_id=" + request->request_id() +
@@ -288,6 +313,39 @@ grpc::Status MessageServiceImpl::SendGroupMessage(grpc::ServerContext* context, 
     return grpc::Status::OK;
 }
 
+grpc::Status MessageServiceImpl::ListConversationMessages(
+    grpc::ServerContext* context,
+    const proto::ListConversationMessagesRequest* request,
+    proto::ListConversationMessagesResponse* response) {
+    if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
+    if (invalidDeps()) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR);
+        return grpc::Status::OK;
+    }
+    if (request->requester_user_id() == 0 || request->conversation_id() == 0 ||
+        !canReadConversation(request->requester_user_id(), request->conversation_id())) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::CONVERSATION_NOT_FOUND);
+        return grpc::Status::OK;
+    }
+    size_t limit = request->page_size() == 0 ? 50 : std::min<size_t>(request->page_size(), 100);
+    int64_t before = request->before_time();
+    auto messages = message_dao_->listConversationMessages(
+        request->conversation_id(), before, request->before_message_id(), limit + 1);
+    const bool has_more = messages.size() > limit;
+    if (has_more) messages.resize(limit);
+    std::reverse(messages.begin(), messages.end());
+    for (const auto& message : messages) {
+        *response->add_messages() = toMessageData(message);
+    }
+    if (!messages.empty()) {
+        response->set_next_before_time(messages.front().created_at);
+        response->set_next_before_message_id(messages.front().message_id);
+    }
+    response->set_has_more(has_more);
+    fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
+    return grpc::Status::OK;
+}
+
 grpc::Status MessageServiceImpl::AckMessage(grpc::ServerContext* context, const proto::AckMessageRequest* request, proto::AckMessageResponse* response) {
     if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     MetricsRegistry::instance().counter("nebula_message_ack_total", "MessageService ack requests").inc();
@@ -297,9 +355,24 @@ grpc::Status MessageServiceImpl::AckMessage(grpc::ServerContext* context, const 
     auto record = message_dao_->getMessageById(request->message_id());
     if (!record.has_value()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::MESSAGE_NOT_FOUND); return grpc::Status::OK; }
     if (!canReceiveMessage(request->user_id(), record.value())) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::MESSAGE_PERMISSION_DENIED); return grpc::Status::OK; }
-    message_dao_->updateMessageStatus(request->message_id(), proto::MESSAGE_STATUS_ACKED);
-    if (message_receipt_dao_ != nullptr) message_receipt_dao_->upsertDelivered(request->message_id(), request->user_id(), TimeUtil::nowMs());
-    offline_message_dao_->markAsAcked(request->user_id(), request->message_id());
+    if (message_receipt_dao_ == nullptr) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR);
+        return grpc::Status::OK;
+    }
+    auto conn = mysql_pool_->acquire();
+    if (!conn) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR);
+        return grpc::Status::OK;
+    }
+    MySqlTransaction tx(*conn);
+    int64_t now = TimeUtil::nowMs();
+    if (!tx.active() ||
+        !message_receipt_dao_->upsertDelivered(*conn, request->message_id(), request->user_id(), now) ||
+        !offline_message_dao_->markAsAcked(*conn, request->user_id(), request->message_id()) ||
+        !tx.commit()) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR);
+        return grpc::Status::OK;
+    }
     fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
     MetricsRegistry::instance().counter("nebula_message_ack_success_total", "MessageService successful acks").inc();
     return grpc::Status::OK;
@@ -315,19 +388,30 @@ grpc::Status MessageServiceImpl::PullOfflineMessages(grpc::ServerContext* contex
     if (limit > static_cast<size_t>(options_.offline_pull_limit)) limit = static_cast<size_t>(options_.offline_pull_limit);
     auto offline = offline_message_dao_->listOfflineMessages(request->user_id(), limit);
     std::vector<uint64_t> delivered;
+    auto conn = mysql_pool_->acquire();
+    if (!conn) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR);
+        return grpc::Status::OK;
+    }
+    MySqlTransaction tx(*conn);
+    if (!tx.active()) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR);
+        return grpc::Status::OK;
+    }
     for (const auto& item : offline) {
         proto::MessageData data;
         if (MessageKafkaPayload::deserializeMessageData(item.payload, &data)) {
             *response->add_messages() = data;
             delivered.push_back(item.message_id);
-            if (message_receipt_dao_ != nullptr) {
-                message_receipt_dao_->upsertDelivered(item.message_id, request->user_id(), TimeUtil::nowMs());
-            }
         } else {
             LOG_ERROR("failed to parse offline message payload message_id=" + std::to_string(item.message_id));
         }
     }
-    offline_message_dao_->markBatchAsPulled(request->user_id(), delivered);
+    if (!offline_message_dao_->markBatchAsPulled(*conn, request->user_id(), delivered) || !tx.commit()) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR);
+        response->clear_messages();
+        return grpc::Status::OK;
+    }
     fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
     response->mutable_page()->set_page(request->page().page());
     response->mutable_page()->set_page_size(static_cast<uint32_t>(limit));
@@ -344,8 +428,17 @@ grpc::Status MessageServiceImpl::MarkMessageRead(grpc::ServerContext* context, c
     auto record = message_dao_->getMessageById(request->message_id());
     if (!record.has_value()) { fillResponse(response, request->request_id(), ErrorCode::MESSAGE_NOT_FOUND); return grpc::Status::OK; }
     if (!canReceiveMessage(request->user_id(), record.value())) { fillResponse(response, request->request_id(), ErrorCode::MESSAGE_PERMISSION_DENIED); return grpc::Status::OK; }
-    if (!message_receipt_dao_->markRead(request->message_id(), request->user_id(), TimeUtil::nowMs())) { fillResponse(response, request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
-    if (conversation_dao_ != nullptr) conversation_dao_->markRead(request->user_id(), record->conversation_id);
+    auto conn = mysql_pool_->acquire();
+    if (!conn) { fillResponse(response, request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
+    MySqlTransaction tx(*conn);
+    int64_t now = TimeUtil::nowMs();
+    if (!tx.active() ||
+        !message_receipt_dao_->markRead(*conn, request->message_id(), request->user_id(), now) ||
+        !conversation_dao_->recalculateUnread(*conn, request->user_id(), record->conversation_id, now) ||
+        !tx.commit()) {
+        fillResponse(response, request->request_id(), ErrorCode::DB_ERROR);
+        return grpc::Status::OK;
+    }
     fillResponse(response, request->request_id(), ErrorCode::OK, "OK");
     MetricsRegistry::instance().counter("nebula_message_mark_read_success_total", "MessageService successful mark-message-read requests").inc();
     return grpc::Status::OK;
@@ -355,11 +448,25 @@ grpc::Status MessageServiceImpl::MarkConversationRead(grpc::ServerContext* conte
     if (!requireInternalRpc(context, request->request_id(), response)) return grpc::Status::OK;
     MetricsRegistry::instance().counter("nebula_message_mark_conversation_read_total", "MessageService mark-conversation-read requests").inc();
     if (invalidDeps() || message_receipt_dao_ == nullptr) { fillResponse(response, request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
-    if (request->user_id() == 0 || request->conversation_id() == 0) { fillResponse(response, request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
+    if (request->user_id() == 0 || request->conversation_id() == 0 || request->up_to_message_id() == 0) { fillResponse(response, request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
     if (!canReadConversation(request->user_id(), request->conversation_id())) { fillResponse(response, request->request_id(), ErrorCode::CONVERSATION_NOT_FOUND); return grpc::Status::OK; }
+    auto cursor = message_dao_->getMessageById(request->up_to_message_id());
+    if (!cursor.has_value() || cursor->conversation_id != request->conversation_id()) {
+        fillResponse(response, request->request_id(), ErrorCode::MESSAGE_NOT_FOUND);
+        return grpc::Status::OK;
+    }
     int64_t now = TimeUtil::nowMs();
-    if (!message_receipt_dao_->markConversationRead(request->conversation_id(), request->user_id(), now)) { fillResponse(response, request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
-    if (conversation_dao_ != nullptr) conversation_dao_->markRead(request->user_id(), request->conversation_id());
+    auto conn = mysql_pool_->acquire();
+    if (!conn) { fillResponse(response, request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
+    MySqlTransaction tx(*conn);
+    if (!tx.active() ||
+        !message_receipt_dao_->markConversationRead(*conn, request->conversation_id(), request->user_id(),
+                                                    request->up_to_message_id(), cursor->created_at, now) ||
+        !conversation_dao_->recalculateUnread(*conn, request->user_id(), request->conversation_id(), now) ||
+        !tx.commit()) {
+        fillResponse(response, request->request_id(), ErrorCode::DB_ERROR);
+        return grpc::Status::OK;
+    }
     fillResponse(response, request->request_id(), ErrorCode::OK, "OK");
     MetricsRegistry::instance().counter("nebula_message_mark_conversation_read_success_total", "MessageService successful mark-conversation-read requests").inc();
     return grpc::Status::OK;
@@ -368,7 +475,13 @@ grpc::Status MessageServiceImpl::MarkConversationRead(grpc::ServerContext* conte
 grpc::Status MessageServiceImpl::GetMessageReadState(grpc::ServerContext* context, const proto::GetMessageReadStateRequest* request, proto::GetMessageReadStateResponse* response) {
     if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     if (message_receipt_dao_ == nullptr) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
-    if (request->message_id() == 0) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
+    if (request->message_id() == 0 || request->requester_user_id() == 0) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
+    auto record = message_dao_->getMessageById(request->message_id());
+    if (!record.has_value()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::MESSAGE_NOT_FOUND); return grpc::Status::OK; }
+    if (record->from_user_id != request->requester_user_id()) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::MESSAGE_PERMISSION_DENIED);
+        return grpc::Status::OK;
+    }
     for (const auto& state : message_receipt_dao_->getReadState(request->message_id())) {
         auto* out = response->add_states();
         out->set_message_id(state.message_id);
@@ -406,24 +519,24 @@ grpc::Status MessageServiceImpl::RecallMessage(grpc::ServerContext* context, con
                      request->request_id(),
                      latest.has_value() && latest->recalled ? ErrorCode::MESSAGE_ALREADY_RECALLED : ErrorCode::DB_ERROR);
     };
-    if (options_.outbox_enabled && mysql_pool_ != nullptr && outbox_dao_ != nullptr) {
-        auto conn = mysql_pool_->acquire();
-        if (!conn) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
-        MySqlTransaction tx(*conn);
-        if (!tx.active()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
-        if (!message_dao_->recallMessage(*conn, request->message_id(), now)) { tx.rollback(); fillRecallUpdateFailure(); return grpc::Status::OK; }
-        OutboxEvent event = makeOutboxEvent(request->message_id() * 10 + 1, "message_recall", request->message_id(),
-                                            record->group_id == 0 ? options_.topic_single : options_.topic_group,
-                                            std::to_string(record->conversation_id), payload, now);
-        if (!outbox_dao_->insertEvent(*conn, event)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OUTBOX_PUBLISH_FAILED); return grpc::Status::OK; }
-        if (!tx.commit()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
-    } else if (kafka_producer_ != nullptr) {
-        if (!message_dao_->recallMessage(request->message_id(), now)) { fillRecallUpdateFailure(); return grpc::Status::OK; }
-        kafka_producer_->produce(record->group_id == 0 ? options_.topic_single : options_.topic_group, std::to_string(record->conversation_id), payload);
-        kafka_producer_->flush(1000);
-    } else {
-        if (!message_dao_->recallMessage(request->message_id(), now)) { fillRecallUpdateFailure(); return grpc::Status::OK; }
+    auto conn = mysql_pool_->acquire();
+    if (!conn) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
+    MySqlTransaction tx(*conn);
+    if (!tx.active()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
+    if (!message_dao_->recallMessage(*conn, request->message_id(), now)) { tx.rollback(); fillRecallUpdateFailure(); return grpc::Status::OK; }
+    OutboxEvent event = makeOutboxEvent(message_id_generator_->nextId(), "message_recall", request->message_id(),
+                                        record->group_id == 0 ? options_.topic_single : options_.topic_group,
+                                        std::to_string(record->conversation_id), payload, now);
+    if (!outbox_dao_->insertEvent(*conn, event)) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OUTBOX_PUBLISH_FAILED); return grpc::Status::OK; }
+    if (!conversation_dao_->recalculateUnreadForConversation(*conn, record->conversation_id, now)) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR);
+        return grpc::Status::OK;
     }
+    if (!conversation_dao_->markLastMessageRecalled(*conn, record->conversation_id, record->message_id, now)) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR);
+        return grpc::Status::OK;
+    }
+    if (!tx.commit()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::DB_ERROR); return grpc::Status::OK; }
     fillResponse(response->mutable_response(), request->request_id(), ErrorCode::OK, "OK");
     response->set_message_id(request->message_id());
     response->set_recalled_at(now);

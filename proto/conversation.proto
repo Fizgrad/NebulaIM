@@ -6,7 +6,6 @@ import "common.proto";
 
 service ConversationService {
   rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
-  rpc MarkConversationRead(ConversationMarkReadRequest) returns (CommonResponse);
   rpc DeleteConversation(ConversationDeleteRequest) returns (CommonResponse);
   rpc PinConversation(ConversationPinRequest) returns (CommonResponse);
   rpc MuteConversation(ConversationMuteRequest) returns (CommonResponse);
@@ -26,6 +25,7 @@ message ConversationInfo {
   bool muted = 11;
   bool deleted = 12;
   int64 updated_at = 13;
+  string group_name = 14;
 }
 
 message ListConversationsRequest {
@@ -38,12 +38,6 @@ message ListConversationsResponse {
   CommonResponse response = 1;
   repeated ConversationInfo conversations = 2;
   PageResponse page = 3;
-}
-
-message ConversationMarkReadRequest {
-  string request_id = 1;
-  uint64 user_id = 2;
-  uint64 conversation_id = 3;
 }
 
 message ConversationDeleteRequest {

@@ -15,6 +15,7 @@ struct MessageRecord {
     uint64_t message_id = 0;
     uint64_t conversation_id = 0;
     uint64_t from_user_id = 0;
+    uint32_t client_sequence_id = 0;
     uint64_t to_user_id = 0;
     uint64_t group_id = 0;
     int message_type = 1;
@@ -34,7 +35,11 @@ public:
     bool insertMessage(MySqlConnection& conn, const MessageRecord& message);
     bool messageExists(uint64_t message_id);
     std::optional<MessageRecord> getMessageById(uint64_t message_id);
-    std::vector<MessageRecord> listConversationMessages(uint64_t conversation_id, int64_t before_time, size_t limit);
+    std::optional<MessageRecord> getMessageByClientSequence(uint64_t from_user_id, uint32_t client_sequence_id);
+    std::vector<MessageRecord> listConversationMessages(uint64_t conversation_id,
+                                                        int64_t before_time,
+                                                        uint64_t before_message_id,
+                                                        size_t limit);
     bool updateMessageStatus(uint64_t message_id, int status);
     bool recallMessage(uint64_t message_id, int64_t recalled_at);
     bool recallMessage(MySqlConnection& conn, uint64_t message_id, int64_t recalled_at);

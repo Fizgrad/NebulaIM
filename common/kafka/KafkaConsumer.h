@@ -49,6 +49,7 @@ public:
 
     KafkaMessage poll(int timeout_ms);
     bool commit(const KafkaMessage& message);
+    bool seek(const KafkaMessage& message, int timeout_ms = 5000);
 
     void close();
     static std::vector<KafkaLagRecord> queryLag(const KafkaConsumerConfig& config,

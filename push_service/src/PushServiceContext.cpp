@@ -1,6 +1,7 @@
 #include "PushServiceContext.h"
 
 #include "PushWorker.h"
+#include "common/config/StorageConfig.h"
 #include "common/log/Logger.h"
 #include "common/rpc/InternalRpcAuth.h"
 #include "common/trace/TraceManager.h"
@@ -14,26 +15,18 @@ bool PushServiceContext::init(const std::string& config_path) {
     if (!config_.loadFromFile(config_path)) return false;
     InternalRpcAuth::instance().configureFromConfig(config_);
     TraceManager::instance().configure(TraceManager::configFrom(config_, "nebula-push-service"));
-    MySqlConfig mysql;
-    mysql.host = config_.getString("mysql.host", mysql.host);
-    mysql.port = config_.getInt("mysql.port", mysql.port);
-    mysql.user = config_.getString("mysql.user", mysql.user);
-    mysql.password = config_.getString("mysql.password", mysql.password);
-    mysql.database = config_.getString("mysql.database", mysql.database);
+    MySqlConfig mysql = loadMySqlConfig(config_);
     if (!mysql_pool_.init(mysql, static_cast<size_t>(config_.getInt("mysql.pool_size", 4)))) return false;
 
     redis_client_ = std::make_unique<RedisClient>();
-    RedisConfig redis;
-    redis.host = config_.getString("redis.host", redis.host);
-    redis.port = config_.getInt("redis.port", redis.port);
-    redis.timeout_ms = config_.getInt("redis.timeout_ms", redis.timeout_ms);
-    redis.password = config_.getString("redis.password", redis.password);
+    RedisConfig redis = loadRedisConfig(config_);
     if (!redis_client_->connect(redis)) return false;
 
     kafka_producer_ = std::make_unique<KafkaProducer>();
     KafkaProducerConfig producer_config;
     producer_config.brokers = config_.getString("kafka.brokers", producer_config.brokers);
     producer_config.client_id = config_.getString("kafka.producer.client_id", "nebula-push-producer");
+    producer_config.delivery_timeout_ms = config_.getInt("kafka.producer.delivery_timeout_ms", producer_config.delivery_timeout_ms);
     if (!kafka_producer_->init(producer_config)) return false;
 
     kafka_consumer_config_.brokers = config_.getString("kafka.brokers", kafka_consumer_config_.brokers);
@@ -96,7 +89,8 @@ bool PushServiceContext::startWorkers() {
         worker_options.topic_single = options_.topic_single;
         worker_options.topic_group = options_.topic_group;
         worker_options.topic_retry = options_.topic_retry;
-        auto worker = std::make_unique<PushWorker>(consumer.get(), dispatcher_.get(), worker_options);
+        worker_options.topic_dlq = options_.topic_dlq;
+        auto worker = std::make_unique<PushWorker>(consumer.get(), kafka_producer_.get(), dispatcher_.get(), worker_options);
         if (!worker->start()) {
             stopWorkers();
             return false;

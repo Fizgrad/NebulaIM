@@ -27,7 +27,6 @@ struct MessageServiceOptions {
     int dedup_ttl_seconds = 86400;
     int offline_pull_limit = 100;
     int recall_window_seconds = 120;
-    bool outbox_enabled = true;
     int outbox_worker_interval_ms = 1000;
     int outbox_batch_size = 100;
     int outbox_max_retry_count = 5;
@@ -56,7 +55,6 @@ public:
     OutboxDao* outboxDao();
     MySqlConnectionPool* mysqlPool();
     RedisClient* redisClient();
-    KafkaProducer* kafkaProducer();
     MessageIdGenerator* messageIdGenerator();
     MessageDeduplicator* messageDeduplicator();
 

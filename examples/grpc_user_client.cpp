@@ -24,7 +24,6 @@ int main() {
     }
 
     std::cout << "login user_id=" << login_resp.user_id()
-              << " token=" << login_resp.token()
               << " expire_at=" << login_resp.expire_at() << std::endl;
 
     nebula::proto::ValidateTokenRequest validate_req;

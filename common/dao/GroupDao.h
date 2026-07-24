@@ -13,6 +13,7 @@ struct Group {
     uint64_t id = 0;
     std::string group_name;
     uint64_t owner_id = 0;
+    uint32_t member_count = 0;
     int64_t created_at = 0;
     int64_t updated_at = 0;
 };
@@ -28,6 +29,8 @@ public:
     bool isMember(uint64_t group_id, uint64_t user_id);
     bool isOwner(uint64_t group_id, uint64_t user_id);
     std::vector<uint64_t> listMembers(uint64_t group_id);
+    std::vector<Group> listGroupsForUser(uint64_t user_id, size_t limit);
+    std::vector<Group> searchGroups(const std::string& query, size_t limit);
 
 private:
     MySqlConnectionPool& pool_;

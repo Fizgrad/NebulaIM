@@ -50,6 +50,8 @@ private:
     void* mysql_;
     MySqlConfig config_;
     bool connected_;
+    uint64_t affected_rows_;
+    uint64_t last_insert_id_;
     std::string last_error_;
 };
 

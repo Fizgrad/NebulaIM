@@ -148,7 +148,7 @@ Use a custom client or benchmark tool to send a legal NebulaIM Packet to `127.0.
 ./build/tests/test_packet_codec
 ```
 
-## Interview talking points
+## Knowledge checks
 
 1. TCP is a byte stream, so packet boundaries must be defined by the application.
 2. A good application protocol includes a fixed header, body length, type, version, and validation fields.

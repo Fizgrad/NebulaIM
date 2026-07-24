@@ -20,7 +20,6 @@ enum class FriendRequestStatus {
 
 struct FriendRequest {
     uint64_t id = 0;
-    uint64_t request_id = 0;
     uint64_t from_user_id = 0;
     uint64_t to_user_id = 0;
     std::string message;
@@ -33,7 +32,8 @@ class FriendRequestDao {
 public:
     explicit FriendRequestDao(MySqlConnectionPool& pool);
 
-    bool createRequest(const FriendRequest& request);
+    bool createRequest(FriendRequest* request);
+    bool hasPendingBetween(uint64_t first_user_id, uint64_t second_user_id);
     std::optional<FriendRequest> getByRequestId(uint64_t request_id);
     bool updateStatus(MySqlConnection& conn, uint64_t request_id, FriendRequestStatus from_status, FriendRequestStatus to_status);
     bool updateStatus(uint64_t request_id, FriendRequestStatus from_status, FriendRequestStatus to_status);

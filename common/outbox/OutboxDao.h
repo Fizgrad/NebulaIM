@@ -31,6 +31,7 @@ struct OutboxEvent {
     int64_t created_at = 0;
     int64_t updated_at = 0;
     std::string trace_id;
+    std::string claim_token;
 };
 
 class OutboxDao {
@@ -40,9 +41,9 @@ public:
     bool insertEvent(MySqlConnection& conn, const OutboxEvent& event);
     std::vector<OutboxEvent> fetchPendingEvents(size_t limit, int64_t now_ms);
     std::vector<OutboxEvent> claimPendingEvents(size_t limit, int64_t now_ms, int64_t lease_ms);
-    bool markPublished(uint64_t event_id);
-    bool markFailed(uint64_t event_id, int retry_count, int64_t next_retry_at);
-    bool markDead(uint64_t event_id);
+    bool markPublished(uint64_t event_id, const std::string& claim_token);
+    bool markFailed(uint64_t event_id, const std::string& claim_token, int retry_count, int64_t next_retry_at);
+    bool markDead(uint64_t event_id, const std::string& claim_token);
 
 private:
     MySqlConnectionPool& pool_;

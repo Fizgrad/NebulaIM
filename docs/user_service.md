@@ -92,7 +92,7 @@ auth.password_min_length=6
 
 LoginRequest also accepts `device_id`, `platform`, and `device_name`. When `device_id` is present, UserService writes `user_devices.token_hash=SHA-256(token)` so DeviceService can revoke the token without storing the raw token.
 
-## Interview points
+## Knowledge checks
 
 1. Username uniqueness relies on both pre-check and DB unique index.
 2. Passwords must not be stored in plaintext.

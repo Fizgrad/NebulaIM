@@ -1,0 +1,100 @@
+name: Backend CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            pkg-config \
+            libssl-dev \
+            protobuf-compiler \
+            libprotobuf-dev \
+            protobuf-compiler-grpc \
+            libgrpc++-dev \
+            default-libmysqlclient-dev \
+            default-mysql-client \
+            libhiredis-dev \
+            librdkafka-dev
+
+      - name: Start integration dependencies
+        run: docker compose -f deploy/docker-compose.yml up -d mysql redis kafka
+
+      - name: Wait for integration dependencies
+        run: ./scripts/wait_ready.sh config/nebula.conf deps
+        env:
+          NEBULA_WAIT_TIMEOUT_SECONDS: "120"
+
+      - name: Apply database migrations
+        run: ./scripts/migrate_db.sh config/nebula.conf
+
+      - name: Initialize Kafka topics
+        run: ./scripts/init_topics.sh
+
+      - name: Build
+        run: ./scripts/build.sh
+
+      - name: Run unit tests
+        run: ctest --test-dir build -L unit --output-on-failure
+
+      - name: Start backend services
+        run: ./scripts/start_services.sh
+
+      - name: Wait for backend services
+        run: ./scripts/wait_ready.sh config/nebula.conf all
+        env:
+          NEBULA_WAIT_TIMEOUT_SECONDS: "120"
+
+      - name: Run integration and end-to-end tests
+        run: |
+          set -euo pipefail
+
+          report="build/integration-results.xml"
+          ctest \
+            --test-dir build \
+            -L integration \
+            --output-on-failure \
+            --output-junit "${report}"
+
+          if grep -Eq '<skipped([ />])|skipped="[1-9]' "${report}"; then
+            echo "Integration tests were skipped; CI requires every integration test to run." >&2
+            grep -nE '<skipped([ />])|skipped="[1-9]' "${report}" >&2 || true
+            exit 1
+          fi
+        env:
+          NEBULA_RUN_BACKEND_E2E: "1"
+
+      - name: Stop backend services
+        if: always()
+        run: ./scripts/stop_services.sh
+
+      - name: Upload service logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nebulaim-service-logs
+          path: logs/
+          if-no-files-found: ignore

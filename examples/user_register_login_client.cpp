@@ -19,10 +19,6 @@ std::string parseAddress(int argc, char** argv) {
     return address;
 }
 
-std::string tokenPrefix(const std::string& token) {
-    return token.size() <= 8 ? token : token.substr(0, 8);
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -57,7 +53,7 @@ int main(int argc, char** argv) {
         std::cerr << "Login failed code=" << login_resp.response().code() << std::endl;
         return 1;
     }
-    std::cout << "login user_id=" << login_resp.user_id() << " token_prefix=" << tokenPrefix(login_resp.token()) << std::endl;
+    std::cout << "login user_id=" << login_resp.user_id() << std::endl;
 
     nebula::proto::ValidateTokenRequest validate_req;
     validate_req.set_request_id("client-validate");

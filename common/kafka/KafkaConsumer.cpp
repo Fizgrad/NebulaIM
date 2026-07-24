@@ -86,6 +86,19 @@ bool KafkaConsumer::commit(const KafkaMessage& message) {
     return true;
 }
 
+bool KafkaConsumer::seek(const KafkaMessage& message, int timeout_ms) {
+    auto* consumer = static_cast<RdKafka::KafkaConsumer*>(consumer_);
+    if (consumer == nullptr || !message.valid) return false;
+    auto* offset = RdKafka::TopicPartition::create(message.topic, message.partition, message.offset);
+    RdKafka::ErrorCode err = consumer->seek(*offset, timeout_ms);
+    delete offset;
+    if (err != RdKafka::ERR_NO_ERROR) {
+        LOG_ERROR("Kafka seek failed: " + RdKafka::err2str(err));
+        return false;
+    }
+    return true;
+}
+
 void KafkaConsumer::close() {
     auto* consumer = static_cast<RdKafka::KafkaConsumer*>(consumer_);
     if (consumer != nullptr) {

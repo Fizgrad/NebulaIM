@@ -14,7 +14,6 @@ namespace {
 FriendRequest parseFriendRequest(MySqlResult& result) {
     FriendRequest request;
     request.id = result.getUInt64("id");
-    request.request_id = result.getUInt64("request_id");
     request.from_user_id = result.getUInt64("from_user_id");
     request.to_user_id = result.getUInt64("to_user_id");
     request.message = result.getString("message");
@@ -28,22 +27,36 @@ FriendRequest parseFriendRequest(MySqlResult& result) {
 
 FriendRequestDao::FriendRequestDao(MySqlConnectionPool& pool) : pool_(pool) {}
 
-bool FriendRequestDao::createRequest(const FriendRequest& request) {
+bool FriendRequestDao::createRequest(FriendRequest* request) {
+    if (request == nullptr) return false;
     auto conn = pool_.acquire();
     if (!conn) return false;
-    int64_t now = request.created_at > 0 ? request.created_at : TimeUtil::nowMs();
-    std::string sql = "INSERT INTO friend_requests(request_id,from_user_id,to_user_id,message,status,created_at,updated_at) VALUES(" +
-                      std::to_string(request.request_id) + "," + std::to_string(request.from_user_id) + "," +
-                      std::to_string(request.to_user_id) + ",'" + conn->escapeString(request.message) + "'," +
-                      std::to_string(request.status) + "," + std::to_string(now) + "," +
-                      std::to_string(request.updated_at > 0 ? request.updated_at : now) + ")";
-    return conn->executeUpdate(sql);
+    int64_t now = request->created_at > 0 ? request->created_at : TimeUtil::nowMs();
+    std::string sql = "INSERT INTO friend_requests(from_user_id,to_user_id,message,status,created_at,updated_at) VALUES(" +
+                      std::to_string(request->from_user_id) + "," +
+                      std::to_string(request->to_user_id) + ",'" + conn->escapeString(request->message) + "'," +
+                      std::to_string(request->status) + "," + std::to_string(now) + "," +
+                      std::to_string(request->updated_at > 0 ? request->updated_at : now) + ")";
+    if (!conn->executeUpdate(sql)) return false;
+    request->id = conn->lastInsertId();
+    return request->id != 0;
+}
+
+bool FriendRequestDao::hasPendingBetween(uint64_t first_user_id, uint64_t second_user_id) {
+    auto conn = pool_.acquire();
+    if (!conn) return false;
+    auto result = conn->executeQuery(
+        "SELECT id FROM friend_requests WHERE status=0 AND ((from_user_id=" +
+        std::to_string(first_user_id) + " AND to_user_id=" + std::to_string(second_user_id) +
+        ") OR (from_user_id=" + std::to_string(second_user_id) + " AND to_user_id=" +
+        std::to_string(first_user_id) + ")) LIMIT 1");
+    return result && result->next();
 }
 
 std::optional<FriendRequest> FriendRequestDao::getByRequestId(uint64_t request_id) {
     auto conn = pool_.acquire();
     if (!conn) return std::nullopt;
-    auto result = conn->executeQuery("SELECT * FROM friend_requests WHERE request_id=" + std::to_string(request_id) + " LIMIT 1");
+    auto result = conn->executeQuery("SELECT * FROM friend_requests WHERE id=" + std::to_string(request_id) + " LIMIT 1");
     if (!result || !result->next()) return std::nullopt;
     return parseFriendRequest(*result);
 }
@@ -54,7 +67,7 @@ bool FriendRequestDao::updateStatus(MySqlConnection& conn,
                                     FriendRequestStatus to_status) {
     if (!conn.executeUpdate("UPDATE friend_requests SET status=" + std::to_string(static_cast<int>(to_status)) +
                             ", updated_at=" + std::to_string(TimeUtil::nowMs()) +
-                            " WHERE request_id=" + std::to_string(request_id) +
+                            " WHERE id=" + std::to_string(request_id) +
                             " AND status=" + std::to_string(static_cast<int>(from_status)))) {
         return false;
     }
@@ -70,7 +83,7 @@ bool FriendRequestDao::updateStatus(uint64_t request_id, FriendRequestStatus fro
 bool FriendRequestDao::acceptRequestWithFriendship(uint64_t request_id, RelationDao& relation_dao) {
     auto conn = pool_.acquire();
     if (!conn) return false;
-    auto result = conn->executeQuery("SELECT * FROM friend_requests WHERE request_id=" + std::to_string(request_id) + " LIMIT 1");
+    auto result = conn->executeQuery("SELECT * FROM friend_requests WHERE id=" + std::to_string(request_id) + " LIMIT 1");
     if (!result || !result->next()) return false;
     FriendRequest request = parseFriendRequest(*result);
     if (request.status != static_cast<int>(FriendRequestStatus::PENDING)) return false;

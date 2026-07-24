@@ -4,6 +4,7 @@
 #endif
 #include "common/protocol/PacketCodec.h"
 #include "common/protocol/ProtocolError.h"
+#include "common/rpc/RpcMetadata.h"
 #include "common/utils/TimeUtil.h"
 #include "common/websocket/WebSocketFrame.h"
 #include "conversation.grpc.pb.h"
@@ -39,6 +40,13 @@ constexpr int kConversationPort = 50056;
 bool shouldRunFullE2E() {
     const char* value = std::getenv("NEBULA_RUN_BACKEND_E2E");
     return value != nullptr && std::string(value) == "1";
+}
+
+void injectInternalRpcToken(grpc::ClientContext* context) {
+    const char* token = std::getenv("NEBULA_TEST_INTERNAL_RPC_TOKEN");
+    if (token != nullptr && token[0] != '\0') {
+        nebula::RpcMetadata::injectInternalToken(context, token);
+    }
 }
 
 bool canConnect(uint16_t port) {
@@ -240,7 +248,7 @@ void sendAck(WsClient* client, uint64_t user_id, uint64_t message_id, uint32_t s
 int main() {
     if (!shouldRunFullE2E()) {
         std::cout << "test_backend_final_e2e skipped: set NEBULA_RUN_BACKEND_E2E=1 after starting services to run the full scenario.\n";
-        return 0;
+        return 77;
     }
 
     requireServices();
@@ -277,6 +285,7 @@ int main() {
     friend_req.set_message("hello");
     nebula::proto::SendFriendRequestResponse friend_resp;
     grpc::ClientContext friend_ctx;
+    injectInternalRpcToken(&friend_ctx);
     assert(relation->SendFriendRequest(&friend_ctx, friend_req, &friend_resp).ok());
     assert(friend_resp.response().code() == 0);
     assert(friend_resp.friend_request_id() != 0);
@@ -287,6 +296,7 @@ int main() {
     accept_req.set_friend_request_id(friend_resp.friend_request_id());
     nebula::proto::CommonResponse accept_resp;
     grpc::ClientContext accept_ctx;
+    injectInternalRpcToken(&accept_ctx);
     assert(relation->AcceptFriendRequest(&accept_ctx, accept_req, &accept_resp).ok());
     assert(accept_resp.code() == 0);
 
@@ -319,14 +329,17 @@ int main() {
     read_req.set_message_id(send_resp.message_id());
     nebula::proto::CommonResponse read_resp;
     grpc::ClientContext read_ctx;
+    injectInternalRpcToken(&read_ctx);
     assert(message->MarkMessageRead(&read_ctx, read_req, &read_resp).ok());
     assert(read_resp.code() == 0);
 
     nebula::proto::GetMessageReadStateRequest read_state_req;
     read_state_req.set_request_id("e2e-read-state");
     read_state_req.set_message_id(send_resp.message_id());
+    read_state_req.set_requester_user_id(reg_a.user_id());
     nebula::proto::GetMessageReadStateResponse read_state_resp;
     grpc::ClientContext read_state_ctx;
+    injectInternalRpcToken(&read_state_ctx);
     assert(message->GetMessageReadState(&read_state_ctx, read_state_req, &read_state_resp).ok());
     assert(read_state_resp.response().code() == 0);
     bool found_read = false;
@@ -341,6 +354,7 @@ int main() {
     recall_req.set_message_id(send_resp.message_id());
     nebula::proto::RecallMessageResponse recall_resp;
     grpc::ClientContext recall_ctx;
+    injectInternalRpcToken(&recall_ctx);
     assert(message->RecallMessage(&recall_ctx, recall_req, &recall_resp).ok());
     assert(recall_resp.response().code() == 0);
     assert(recall_resp.recalled_at() > 0);
@@ -360,6 +374,7 @@ int main() {
     list_req.mutable_page()->set_page_size(20);
     nebula::proto::ListConversationsResponse list_resp;
     grpc::ClientContext list_ctx;
+    injectInternalRpcToken(&list_ctx);
     assert(conversation->ListConversations(&list_ctx, list_req, &list_resp).ok());
     assert(list_resp.response().code() == 0);
     bool found_conversation = false;

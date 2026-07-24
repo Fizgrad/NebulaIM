@@ -46,6 +46,15 @@ public:
     grpc::Status ListGroupMembers(grpc::ServerContext* context,
                                   const proto::ListGroupMembersRequest* request,
                                   proto::ListGroupMembersResponse* response) override;
+    grpc::Status GetGroup(grpc::ServerContext* context,
+                          const proto::GetGroupRequest* request,
+                          proto::GetGroupResponse* response) override;
+    grpc::Status ListGroups(grpc::ServerContext* context,
+                            const proto::ListGroupsRequest* request,
+                            proto::ListGroupsResponse* response) override;
+    grpc::Status SearchGroups(grpc::ServerContext* context,
+                              const proto::SearchGroupsRequest* request,
+                              proto::ListGroupsResponse* response) override;
 
 private:
     UserDao* user_dao_;

@@ -7,6 +7,7 @@
 namespace nebula {
 
 class MySqlConnectionPool;
+class MySqlConnection;
 
 enum class OfflineMessageStatus {
     Pending = 0,
@@ -32,7 +33,9 @@ public:
     std::vector<OfflineMessage> listOfflineMessages(uint64_t user_id, size_t limit);
     bool markAsPulled(uint64_t user_id, uint64_t message_id);
     bool markBatchAsPulled(uint64_t user_id, const std::vector<uint64_t>& message_ids);
+    bool markBatchAsPulled(MySqlConnection& conn, uint64_t user_id, const std::vector<uint64_t>& message_ids);
     bool markAsAcked(uint64_t user_id, uint64_t message_id);
+    bool markAsAcked(MySqlConnection& conn, uint64_t user_id, uint64_t message_id);
     bool deleteAckedMessages(uint64_t user_id);
 
 private:

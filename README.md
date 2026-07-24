@@ -42,7 +42,7 @@ AdminService
 - Username lookup for frontend friend requests.
 - RelationService friend requests, friends, groups, group search and group membership.
 - MessageService friend-only direct messages, group-member messages, text/image content, message IDs, deduplication, authorized ACK/read markers, persistence, conversations, recall and outbox publication.
-- ConversationService list/history/read marker support.
+- ConversationService owns conversation list, pin, mute and delete views; MessageService owns history and read cursors.
 - PushService Kafka manual commit after successful handling, low-latency consumer tuning, retry and DLQ paths.
 - Multi-device online state keyed by user, device and Gateway connection.
 - Optional internal gRPC metadata auth with `x-nebula-internal-token`.
@@ -245,7 +245,7 @@ AdminService
 - 支持按 username 查询用户，用于前端添加好友。
 - RelationService 支持好友请求、好友、群组、群搜索和群成员。
 - MessageService 支持好友单聊、群成员群聊、文本和图片消息、消息 ID、去重、ACK/已读权限校验、持久化、会话更新、撤回和 outbox 发布。
-- ConversationService 支持会话列表、历史消息和已读标记。
+- ConversationService 负责会话列表、置顶、免打扰和删除视图；历史消息与已读游标由 MessageService 负责。
 - PushService 在处理成功后手动提交 Kafka offset，并支持低延迟 consumer 配置、重试和 DLQ 路径。
 - 多设备在线状态按 user、device 和 Gateway connection 记录。
 - 可选内部 gRPC metadata 鉴权，使用 `x-nebula-internal-token`。

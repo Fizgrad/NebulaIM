@@ -1,5 +1,6 @@
 #include "PushWorker.h"
 
+#include "common/kafka/KafkaProducer.h"
 #include "common/log/Logger.h"
 #include "common/message/MessageKafkaPayload.h"
 #include "common/monitor/MetricsRegistry.h"
@@ -7,24 +8,26 @@
 #include "common/trace/TraceContext.h"
 #include "common/trace/TraceSpan.h"
 
+#include <chrono>
+
 namespace nebula {
 
-PushWorker::PushWorker(KafkaConsumer* consumer, PushDispatcher* dispatcher, PushWorkerOptions options)
-    : consumer_(consumer), dispatcher_(dispatcher), options_(std::move(options)), running_(false) {}
+PushWorker::PushWorker(KafkaConsumer* consumer, KafkaProducer* producer, PushDispatcher* dispatcher, PushWorkerOptions options)
+    : consumer_(consumer), producer_(producer), dispatcher_(dispatcher), options_(std::move(options)), running_(false) {}
 
 PushWorker::~PushWorker() { stop(); }
 
 bool PushWorker::start() {
-    if (running_) return true;
-    if (consumer_ == nullptr || dispatcher_ == nullptr) return false;
-    running_ = true;
+    if (consumer_ == nullptr || producer_ == nullptr || dispatcher_ == nullptr) return false;
+    bool expected = false;
+    if (!running_.compare_exchange_strong(expected, true)) return true;
     worker_thread_ = std::thread([this]() { run(); });
     return true;
 }
 
 void PushWorker::stop() {
-    if (!running_) return;
-    running_ = false;
+    bool expected = true;
+    if (!running_.compare_exchange_strong(expected, false)) return;
     if (worker_thread_.joinable()) worker_thread_.join();
 }
 
@@ -45,6 +48,12 @@ void PushWorker::run() {
                 MetricsRegistry::instance().counter("nebula_push_kafka_commit_total", "PushService Kafka offsets committed").inc();
             } else {
                 MetricsRegistry::instance().counter("nebula_push_kafka_commit_failed_total", "PushService Kafka offset commit failures").inc();
+                if (!consumer_->seek(message)) {
+                    LOG_ERROR("PushWorker failed to rewind after commit failure; stopping to preserve ordering");
+                    running_ = false;
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(options_.failure_backoff_ms));
             }
             LOG_INFO("PushWorker handled topic=" + message.topic +
                      " partition=" + std::to_string(message.partition) +
@@ -55,6 +64,12 @@ void PushWorker::run() {
             LOG_ERROR("PushWorker message handling failed topic=" + message.topic +
                       " partition=" + std::to_string(message.partition) +
                       " offset=" + std::to_string(message.offset));
+            if (!consumer_->seek(message)) {
+                LOG_ERROR("PushWorker failed to rewind Kafka offset; stopping to prevent message loss");
+                running_ = false;
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(options_.failure_backoff_ms));
         }
     }
 }
@@ -66,7 +81,7 @@ bool PushWorker::handleKafkaMessage(const KafkaMessage& message) {
                   " partition=" + std::to_string(message.partition) +
                   " offset=" + std::to_string(message.offset) +
                   " payload_bytes=" + std::to_string(message.payload.size()));
-        return true;
+        return producer_ != nullptr && producer_->produce(options_.topic_dlq, message.key, message.payload);
     }
     TraceContext::Scope trace(TraceContext::ensureTraceId(data.trace_id()));
     TraceSpan span("push.kafka.consume", TraceSpanKind::CONSUMER);
@@ -77,14 +92,22 @@ bool PushWorker::handleKafkaMessage(const KafkaMessage& message) {
     if (message.topic == options_.topic_single) return handleSingleMessage(data);
     if (message.topic == options_.topic_group) return handleGroupMessage(data);
     if (message.topic == options_.topic_retry) return handleRetryMessage(data);
-    return true;
+    return producer_ != nullptr && producer_->produce(options_.topic_dlq, message.key, message.payload);
 }
 
 bool PushWorker::handleSingleMessage(const proto::MessageData& data) {
+    if (data.message_id() == 0 || data.from_user_id() == 0 || data.to_user_id() == 0) {
+        return producer_->produce(options_.topic_dlq, std::to_string(data.message_id()),
+                                  MessageKafkaPayload::serializeMessageData(data));
+    }
     return dispatcher_->pushToUser("kafka-single", data.to_user_id(), data);
 }
 
 bool PushWorker::handleGroupMessage(const proto::MessageData& data) {
+    if (data.message_id() == 0 || data.from_user_id() == 0 || data.group_id() == 0) {
+        return producer_->produce(options_.topic_dlq, std::to_string(data.message_id()),
+                                  MessageKafkaPayload::serializeMessageData(data));
+    }
     PushResult result = dispatcher_->pushToGroup("kafka-group", data.group_id(), data);
     return result.failed_count == 0;
 }
@@ -95,7 +118,8 @@ bool PushWorker::handleRetryMessage(const proto::MessageData& data) {
         PushResult result = dispatcher_->pushToGroup("kafka-retry", data.group_id(), data);
         return result.failed_count == 0;
     }
-    return true;
+    return producer_->produce(options_.topic_dlq, std::to_string(data.message_id()),
+                              MessageKafkaPayload::serializeMessageData(data));
 }
 
 }  // namespace nebula

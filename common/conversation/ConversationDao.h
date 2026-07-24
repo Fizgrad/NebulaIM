@@ -23,6 +23,7 @@ struct Conversation {
     uint64_t group_id = 0;
     uint64_t last_message_id = 0;
     std::string last_message_preview;
+    std::string group_name;
     int64_t last_message_at = 0;
     int unread_count = 0;
     bool pinned = false;
@@ -67,6 +68,12 @@ public:
     std::vector<Conversation> listConversations(uint64_t owner_user_id, size_t limit, size_t offset);
     bool isOwner(uint64_t owner_user_id, uint64_t conversation_id);
     bool markRead(uint64_t owner_user_id, uint64_t conversation_id);
+    bool recalculateUnread(MySqlConnection& conn, uint64_t owner_user_id, uint64_t conversation_id, int64_t now_ms);
+    bool recalculateUnreadForConversation(MySqlConnection& conn, uint64_t conversation_id, int64_t now_ms);
+    bool markLastMessageRecalled(MySqlConnection& conn,
+                                 uint64_t conversation_id,
+                                 uint64_t message_id,
+                                 int64_t recalled_at);
     bool deleteConversation(uint64_t owner_user_id, uint64_t conversation_id);
     bool pinConversation(uint64_t owner_user_id, uint64_t conversation_id, bool pinned);
     bool muteConversation(uint64_t owner_user_id, uint64_t conversation_id, bool muted);

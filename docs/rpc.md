@@ -108,7 +108,7 @@ Run Packet + Protobuf demo:
 
 `test_grpc_user_service` exercises the generated gRPC contract and service implementation without requiring a long-running external process.
 
-## Interview talking points
+## Knowledge checks
 
 1. gRPC avoids repeated JSON parse overhead and gives typed service contracts.
 2. Protobuf is compact, schema-driven, fast, and explicit about schema evolution.

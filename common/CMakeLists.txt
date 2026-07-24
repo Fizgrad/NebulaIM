@@ -76,6 +76,7 @@ set(NEBULA_COMMON_SOURCES
 
 if(NEBULA_ENABLE_STORAGE)
     list(APPEND NEBULA_COMMON_SOURCES
+        config/StorageConfig.cpp
         db/MySqlConnection.cpp
         db/MySqlResult.cpp
         db/MySqlConnectionPool.cpp

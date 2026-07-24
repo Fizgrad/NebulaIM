@@ -75,7 +75,7 @@ ListGroupMembers reads member IDs and returns public UserInfo.
 ./build/tests/test_relation_service_integration
 ```
 
-## Interview points
+## Knowledge checks
 
 1. Friend relation can be stored as one bidirectional logical edge or two directional rows.
 2. Two-row design makes listFriends simple but needs transaction consistency.
