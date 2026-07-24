@@ -227,7 +227,7 @@ void TcpConnection::sendInLoop(const char* data, size_t len) {
     bool fault_error = false;
 
     if (!channel_->isWriting() && output_buffer_.readableBytes() == 0) {
-        nwrote = ::write(channel_->fd(), data, len);
+        nwrote = ::send(channel_->fd(), data, len, MSG_NOSIGNAL);
         if (nwrote >= 0) {
             remaining = len - static_cast<size_t>(nwrote);
             if (remaining == 0 && write_complete_callback_) {

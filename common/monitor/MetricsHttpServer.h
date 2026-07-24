@@ -21,7 +21,7 @@ private:
 private:
     std::string host_;
     int port_;
-    int listen_fd_;
+    std::atomic<int> listen_fd_;
     std::atomic<bool> running_;
     std::thread thread_;
 };

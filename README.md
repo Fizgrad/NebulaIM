@@ -36,9 +36,9 @@ AdminService
 - C++17 epoll + Reactor networking.
 - TCP and WebSocket Gateway with the same binary Packet protocol.
 - Bounded asynchronous Gateway backend RPC executor.
-- User registration, login, token validation, refresh and logout.
+- User registration, login, token validation, refresh and profile lookup.
 - Password hashing and Redis token storage with hashed token keys.
-- DeviceService lists devices and revokes one or all devices by clearing token hash, Redis online keys and best-effort Gateway connection state.
+- DeviceService owns logout and device revocation. It clears token and online state, requests Gateway connection closure, and reports failure when live closure cannot be confirmed.
 - Username lookup for frontend friend requests.
 - RelationService friend requests, friends, groups, group search and group membership.
 - MessageService friend-only direct messages, group-member messages, text/image content, message IDs, deduplication, authorized ACK/read markers, persistence, conversations, recall and outbox publication.
@@ -162,14 +162,40 @@ mysql.password=<secret>
 redis.password=<secret>
 ```
 
-Validate production config before installing services:
+Create and validate production config:
 
 ```bash
-./scripts/validate_prod_config.sh /etc/nebulaim/nebula.conf
-sudo ./scripts/install_single_node.sh
+sudo mkdir -p /etc/nebulaim
+sudo cp config/nebula.prod.conf.example /etc/nebulaim/nebula.conf
+sudo editor /etc/nebulaim/nebula.conf
+sudo ./scripts/validate_prod_config.sh /etc/nebulaim/nebula.conf
 ```
 
-See `docs/single_node_production.md` for systemd, Nginx TLS termination, backups, restore and health checks.
+Start loopback-only middleware and initialize persistent state:
+
+```bash
+export NEBULA_MYSQL_ROOT_PASSWORD='<random-root-password>'
+export NEBULA_MYSQL_PASSWORD='<random-app-password>'
+export NEBULA_REDIS_PASSWORD='<random-redis-password>'
+export NEBULA_GRAFANA_PASSWORD='<random-grafana-password>'
+./scripts/start_deps_prod.sh
+NEBULA_ENV=production ./scripts/migrate_db.sh /etc/nebulaim/nebula.conf
+./scripts/init_topics.sh
+```
+
+Build, verify, install, and start:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j"$(nproc)"
+ctest --test-dir build --output-on-failure
+sudo ./scripts/install_single_node.sh
+sudo systemctl start nebulaim.target
+sudo systemctl status nebulaim.target
+./scripts/health_check.sh /etc/nebulaim/nebula.conf
+```
+
+The installer uses `/opt/nebulaim`, `/etc/nebulaim/nebula.conf`, and the `nebula` system account because the checked-in systemd units use those exact values. Put Nginx in front of Gateway for public TLS, expose only 80/443, and keep gRPC, middleware, metrics, Grafana and Jaeger on loopback. See `docs/single_node_production.md` for Nginx, backups and restore.
 
 ### Documentation
 
@@ -192,7 +218,6 @@ Topic documents under `docs/` describe the current backend internals:
 - `docs/production_checklist.md`
 - `docs/single_node_production.md`
 - `docs/troubleshooting.md`
-- `web_sdk/README.md`
 
 Agent learning examples:
 
@@ -239,9 +264,9 @@ AdminService
 - C++17 epoll + Reactor 网络库。
 - TCP 和 WebSocket Gateway 复用同一套二进制 Packet 协议。
 - Gateway 后端 RPC 使用有界异步执行器。
-- 用户注册、登录、token 校验、刷新和登出。
+- 用户注册、登录、token 校验、刷新和资料查询。
 - 密码哈希存储，Redis token key 使用 token 哈希。
-- DeviceService 支持设备列表和踢出单个/全部设备，会清理 token 哈希、Redis 在线键，并尽力关闭 Gateway 连接。
+- DeviceService 负责登出和设备撤销：清理 token 与在线状态，请求 Gateway 关闭连接，无法确认实时连接关闭时返回失败。
 - 支持按 username 查询用户，用于前端添加好友。
 - RelationService 支持好友请求、好友、群组、群搜索和群成员。
 - MessageService 支持好友单聊、群成员群聊、文本和图片消息、消息 ID、去重、ACK/已读权限校验、持久化、会话更新、撤回和 outbox 发布。
@@ -365,14 +390,40 @@ mysql.password=<secret>
 redis.password=<secret>
 ```
 
-安装服务前校验生产配置：
+创建并校验生产配置：
 
 ```bash
-./scripts/validate_prod_config.sh /etc/nebulaim/nebula.conf
-sudo ./scripts/install_single_node.sh
+sudo mkdir -p /etc/nebulaim
+sudo cp config/nebula.prod.conf.example /etc/nebulaim/nebula.conf
+sudo editor /etc/nebulaim/nebula.conf
+sudo ./scripts/validate_prod_config.sh /etc/nebulaim/nebula.conf
 ```
 
-systemd、Nginx TLS 终止、备份、恢复和健康检查见 `docs/single_node_production.md`。
+启动仅监听回环地址的依赖并初始化持久化状态：
+
+```bash
+export NEBULA_MYSQL_ROOT_PASSWORD='<随机-root-密码>'
+export NEBULA_MYSQL_PASSWORD='<随机应用密码>'
+export NEBULA_REDIS_PASSWORD='<随机-Redis-密码>'
+export NEBULA_GRAFANA_PASSWORD='<随机-Grafana-密码>'
+./scripts/start_deps_prod.sh
+NEBULA_ENV=production ./scripts/migrate_db.sh /etc/nebulaim/nebula.conf
+./scripts/init_topics.sh
+```
+
+构建、验证、安装并启动：
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j"$(nproc)"
+ctest --test-dir build --output-on-failure
+sudo ./scripts/install_single_node.sh
+sudo systemctl start nebulaim.target
+sudo systemctl status nebulaim.target
+./scripts/health_check.sh /etc/nebulaim/nebula.conf
+```
+
+安装脚本固定使用 `/opt/nebulaim`、`/etc/nebulaim/nebula.conf` 和 `nebula` 系统账号，与仓库中的 systemd 单元保持一致。公网入口由 Nginx 提供 TLS，只开放 80/443；gRPC、依赖、指标、Grafana 和 Jaeger 保持回环监听。Nginx、备份和恢复见 `docs/single_node_production.md`。
 
 ### 文档
 
@@ -395,7 +446,6 @@ systemd、Nginx TLS 终止、备份、恢复和健康检查见 `docs/single_node
 - `docs/production_checklist.md`
 - `docs/single_node_production.md`
 - `docs/troubleshooting.md`
-- `web_sdk/README.md`
 
 Agent 学习示例：
 

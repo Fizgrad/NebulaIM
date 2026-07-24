@@ -9,7 +9,7 @@ int main() {
         "Host: localhost\r\n"
         "Upgrade: websocket\r\n"
         "Connection: Upgrade\r\n"
-        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"  // gitleaks:allow RFC 6455 example nonce
         "Sec-WebSocket-Version: 13\r\n\r\n";
     auto result = nebula::WebSocketHandshake::buildServerResponse(request);
     assert(result.ok);

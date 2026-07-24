@@ -17,7 +17,7 @@ These are repository rules for AI agents working on NebulaIM. Keep changes align
 - Keep generated output, logs and runtime state out of source: `build/`, `logs/`, `run/`, CMake artifacts and local secrets must not be committed.
 - Do not commit raw tokens, passwords, private keys or production host-specific secrets. Examples must use placeholders such as `<secret>`.
 - Keep docs current with behavior changes. Update README and the service-specific doc when a user-visible API, protocol field, deployment variable or operational flow changes.
-- Preserve backward-compatible protobuf fields. Adding fields is safer than reusing or renumbering existing fields.
+- Never reuse or renumber protobuf field numbers. Reserve numbers removed from the current schema.
 - Prefer focused tests that cover the changed service or shared component.
 
 ## C++ Rules

@@ -62,14 +62,12 @@ std::string errorCodeToString(ErrorCode code) {
         case ErrorCode::FRIEND_REQUEST_NOT_FOUND: return "FRIEND_REQUEST_NOT_FOUND";
         case ErrorCode::FRIEND_REQUEST_ALREADY_EXISTS: return "FRIEND_REQUEST_ALREADY_EXISTS";
         case ErrorCode::FRIEND_REQUEST_ALREADY_HANDLED: return "FRIEND_REQUEST_ALREADY_HANDLED";
-        case ErrorCode::FRIEND_REQUEST_REQUIRED: return "FRIEND_REQUEST_REQUIRED";
         case ErrorCode::CONVERSATION_NOT_FOUND: return "CONVERSATION_NOT_FOUND";
         case ErrorCode::MESSAGE_RECALL_TIMEOUT: return "MESSAGE_RECALL_TIMEOUT";
         case ErrorCode::MESSAGE_RECALL_PERMISSION_DENIED: return "MESSAGE_RECALL_PERMISSION_DENIED";
         case ErrorCode::MESSAGE_ALREADY_RECALLED: return "MESSAGE_ALREADY_RECALLED";
         case ErrorCode::DEVICE_NOT_FOUND: return "DEVICE_NOT_FOUND";
         case ErrorCode::TOKEN_REFRESH_FAILED: return "TOKEN_REFRESH_FAILED";
-        case ErrorCode::LOGOUT_FAILED: return "LOGOUT_FAILED";
         case ErrorCode::OUTBOX_EVENT_NOT_FOUND: return "OUTBOX_EVENT_NOT_FOUND";
         case ErrorCode::OUTBOX_PUBLISH_FAILED: return "OUTBOX_PUBLISH_FAILED";
     }

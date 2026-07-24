@@ -1,1 +1,46 @@
-{"title":"NebulaIM","schemaVersion":39,"version":1,"panels":[{"type":"timeseries","title":"Gateway Connections","targets":[{"expr":"nebula_gateway_connections"}]},{"type":"timeseries","title":"Gateway Online Users","targets":[{"expr":"nebula_gateway_online_users"}]},{"type":"timeseries","title":"Message Send Single","targets":[{"expr":"rate(nebula_message_send_single_total[1m])"}]},{"type":"timeseries","title":"Push DLQ","targets":[{"expr":"nebula_push_dlq_total"}]}]}
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "panels": [
+    {
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{"expr": "nebula_gateway_active_connections", "refId": "A"}],
+      "title": "Gateway Active Connections",
+      "type": "timeseries"
+    },
+    {
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [{"expr": "rate(nebula_gateway_packets_total[1m])", "refId": "A"}],
+      "title": "Gateway Packets per Second",
+      "type": "timeseries"
+    },
+    {
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [{"expr": "rate(nebula_message_send_single_success_total[1m])", "refId": "A"}],
+      "title": "Successful Direct Messages per Second",
+      "type": "timeseries"
+    },
+    {
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [{"expr": "rate(nebula_push_kafka_handle_failed_total[1m])", "refId": "A"}],
+      "title": "Push Handling Failures per Second",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["nebulaim"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "NebulaIM",
+  "uid": "nebulaim",
+  "version": 2
+}

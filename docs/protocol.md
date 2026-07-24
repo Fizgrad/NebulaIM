@@ -156,7 +156,7 @@ Use a custom client or benchmark tool to send a legal NebulaIM Packet to `127.0.
 4. Network byte order avoids endian incompatibility across machines.
 5. Direct struct memcpy is unsafe because of padding, alignment, and endian differences.
 6. Magic rejects invalid traffic early.
-7. Version supports rolling upgrades and compatibility handling.
+7. Version makes protocol evolution explicit and rejects unsupported framing.
 8. body_length must be limited to prevent memory exhaustion.
 9. sequence_id maps responses to requests in asynchronous clients.
 10. Malicious large packets are rejected before body allocation.

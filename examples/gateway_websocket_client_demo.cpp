@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
         "Host: " + url.host + "\r\n"
         "Upgrade: websocket\r\n"
         "Connection: Upgrade\r\n"
-        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"  // gitleaks:allow RFC 6455 example nonce
         "Sec-WebSocket-Version: 13\r\n\r\n";
     ::write(fd, handshake.data(), handshake.size());
     char buf[4096];

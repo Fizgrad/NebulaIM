@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PREFIX="${PREFIX:-/opt/nebulaim}"
-CONFIG_DIR="${CONFIG_DIR:-/etc/nebulaim}"
-SERVICE_USER="${SERVICE_USER:-nebula}"
+PREFIX="/opt/nebulaim"
+CONFIG_DIR="/etc/nebulaim"
+SERVICE_USER="nebula"
 START_SERVICES="${START_SERVICES:-false}"
 
 if [[ "${EUID}" -ne 0 ]]; then

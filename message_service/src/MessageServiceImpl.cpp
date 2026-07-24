@@ -121,7 +121,7 @@ bool MessageServiceImpl::validateContent(const std::string& request_id, const st
 bool MessageServiceImpl::canReceiveMessage(uint64_t user_id, const MessageRecord& record) const {
     if (user_id == 0 || record.from_user_id == user_id) return false;
     if (record.group_id != 0) {
-        return group_dao_ != nullptr && group_dao_->isMember(record.group_id, user_id);
+        return canReadConversation(user_id, record.conversation_id);
     }
     return record.to_user_id == user_id;
 }

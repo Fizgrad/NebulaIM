@@ -2,7 +2,7 @@
 
 ## Current Capability
 
-UserService is the auth/profile service backed by MySQL and Redis. It supports Register, Login, ValidateToken, GetUserInfo, GetUserByUsername, Logout, RefreshToken, and login-time device metadata persistence.
+UserService is the auth/profile service backed by MySQL and Redis. It supports Register, Login, ValidateToken, GetUserInfo, GetUserByUsername, RefreshToken, and login-time device metadata persistence. DeviceService owns logout and device revocation.
 
 ## Flow summary
 
@@ -34,12 +34,6 @@ GetUserByUsername:
 
 ```text
 username -> UserDao getUserByUsername -> public UserInfo
-```
-
-Logout:
-
-```text
-token -> SHA-256(token) -> Redis DEL nebula:token:{token_hash} -> return CommonResponse
 ```
 
 RefreshToken:
@@ -104,8 +98,8 @@ LoginRequest also accepts `device_id`, `platform`, and `device_name`. When `devi
 8. Redis failure during login should fail the login because token persistence failed.
 9. ValidateToken can be optimized with short-lived local cache if Redis is hot.
 10. Multi-device login can store multiple random tokens per user/device.
-11. Logout deletes the hashed token key.
-12. Kickout deletes token and notifies gateway.
+11. DeviceService revocation deletes the hashed token key and online state.
+12. DeviceService also requests Gateway connection closure and reports an unconfirmed live closure.
 13. JWT is self-contained but harder to revoke; random token is centrally revocable.
 14. UserDao centralizes SQL and escaping.
 15. UserServiceContext centralizes dependency lifecycle.

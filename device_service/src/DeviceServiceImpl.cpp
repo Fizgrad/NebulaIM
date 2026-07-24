@@ -182,7 +182,7 @@ bool DeviceServiceImpl::revokeDevice(const std::string& request_id, uint64_t use
                  " gateway_id=" + gateway_id +
                  " connection_id=" + connection_id);
     }
-    return device_ok;
+    return device_ok && live_kick_ok;
 }
 
 std::string DeviceServiceImpl::devicesKey(uint64_t user_id) const { return "nebula:user:devices:" + std::to_string(user_id); }

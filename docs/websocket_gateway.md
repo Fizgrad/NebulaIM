@@ -23,7 +23,7 @@ That lets frontend code and bridge tools reuse the same PacketCodec semantics. P
 
 Push delivery also preserves the transport wrapper. `GatewayService.DeliverToConnection` checks the stored connection context; WebSocket clients receive a server WebSocket binary frame containing the `PUSH_MSG` Packet bytes, while native TCP clients receive raw Packet bytes.
 
-Browser applications should not send JSON text frames to Gateway. Use `web_sdk/nebulaim.js` or equivalent code to build:
+Browser applications should not send JSON text frames to Gateway. NebulaIM-Web `DirectGatewayClient` builds:
 
 ```text
 protobuf request -> NebulaIM Packet -> WebSocket binary frame

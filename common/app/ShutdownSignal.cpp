@@ -36,6 +36,7 @@ bool ShutdownSignalWatcher::requested() {
 }
 
 void ShutdownSignalWatcher::install() {
+    std::signal(SIGPIPE, SIG_IGN);
     std::signal(SIGINT, &ShutdownSignalWatcher::handleSignal);
     std::signal(SIGTERM, &ShutdownSignalWatcher::handleSignal);
 }

@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cerrno>
 #include <cstring>
+#include <sys/socket.h>
 #include <sys/uio.h>
 #include <unistd.h>
 
@@ -111,7 +112,7 @@ ssize_t Buffer::readFd(int fd, int* saved_errno) {
 }
 
 ssize_t Buffer::writeFd(int fd, int* saved_errno) {
-    const ssize_t n = ::write(fd, peek(), readableBytes());
+    const ssize_t n = ::send(fd, peek(), readableBytes(), MSG_NOSIGNAL);
     if (n < 0) {
         if (saved_errno != nullptr) {
             *saved_errno = errno;

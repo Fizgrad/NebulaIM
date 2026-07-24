@@ -24,7 +24,7 @@ nebula:user:conn:{user_id}:{device_id} -> connection_id
 
 Missing device keys mean that device is offline. Gateway refreshes TTL on heartbeat and removes the current device mapping on close/logout. Push-side online reads prune stale device IDs from `nebula:user:devices:{user_id}` when either the gateway or connection key has expired.
 
-PushService defaults to all online devices for a user. The production online-state model uses only the multi-device keys above; old single-user Redis keys are not written or read by the production path.
+PushService delivers to every online device using only the multi-device keys above.
 
 When PushService delivers to a browser connection, GatewayService wraps the `PUSH_MSG` packet in a WebSocket binary frame before writing to the socket. Native TCP clients still receive raw NebulaIM Packet bytes.
 

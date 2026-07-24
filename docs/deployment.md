@@ -44,6 +44,8 @@ Local `start_services.sh` waits for each service dependency through `wait_ready.
 
 For single-node production with systemd/Nginx/backups, use `docs/single_node_production.md` instead of the local `start_services.sh` workflow.
 
+Prometheus and Grafana use host networking so they can reach the C++ metrics listeners on `127.0.0.1:9100..9107` without publishing those listeners outside the host. Prometheus listens on `127.0.0.1:9090`, Grafana listens on `127.0.0.1:3000`, and the provisioned Grafana datasource points to `http://127.0.0.1:9090`. The Compose limits are 256 MiB for Prometheus, 192 MiB for Grafana, and 384 MiB for Jaeger.
+
 AdminService is protected by scoped `admin_service.admin_tokens`. The tracked development config leaves admin tokens empty, so AdminService denies admin RPCs until a local or production config provides token hashes.
 
 ```text

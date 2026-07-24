@@ -88,7 +88,7 @@ bool GatewayBenchClient::connectGateway(std::string* error) {
             << "Host: " << host_ << ":" << port_ << "\r\n"
             << "Upgrade: websocket\r\n"
             << "Connection: Upgrade\r\n"
-            << "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+            << "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"  // gitleaks:allow RFC 6455 example nonce
             << "Sec-WebSocket-Version: 13\r\n"
             << "Origin: http://" << host_ << "\r\n\r\n";
     if (!writeAll(request.str(), error)) {

@@ -51,7 +51,7 @@ AdminService provides token-protected health, cleanup, online stats, outbox stat
 
 - Register users.
 - Login users with password hashing.
-- Generate, validate, refresh, and delete tokens.
+- Generate, validate, and refresh tokens.
 - Persist/update device metadata with hashed token values.
 - Query user profiles.
 
@@ -59,7 +59,7 @@ AdminService provides token-protected health, cleanup, online stats, outbox stat
 
 - List a user's known devices.
 - Resolve online state from Redis multi-device keys.
-- Kick one device or all devices by clearing token hash, Redis online keys, device-set membership, and the Gateway connection.
+- Revoke one device or all devices by clearing token hash, Redis online keys and device-set membership, and require confirmation when closing a live Gateway connection.
 
 ### RelationService
 

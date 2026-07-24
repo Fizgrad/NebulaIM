@@ -45,7 +45,7 @@ nebula:user:online:{user_id}:{device_id}
 nebula:user:conn:{user_id}:{device_id}
 ```
 
-Gateway no longer writes or reads old single-user Redis online keys. Production online state is device-scoped only.
+Gateway online state is device-scoped and uses only the keys above.
 
 Gateway writes online state from multiple EventLoop/RPC callback paths. The shared `RedisClient` serializes hiredis commands internally, so online writes, heartbeat refreshes, and disconnect cleanup cannot corrupt one Redis connection. If a deployment raises Gateway worker concurrency materially, prefer a Redis client pool to avoid that mutex becoming a throughput bottleneck.
 

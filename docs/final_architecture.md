@@ -2,7 +2,7 @@
 
 ```text
 Native Client -> TCP/TLS PacketCodec ------------------+
-Browser       -> WS/WSS Binary + PacketCodec ----------+--> Gateway
+Browser -> Web Bridge /ws -> TCP/TLS PacketCodec ------+--> Gateway
                                                              |
                                                              | bounded gRPC/RpcExecutor
                                                              v

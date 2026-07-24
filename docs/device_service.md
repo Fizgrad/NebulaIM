@@ -2,7 +2,7 @@
 
 ## Responsibilities
 
-DeviceService is the internal device-management service. It reads device rows written during login, checks Redis online state, and revokes devices by clearing token and connection state. Closing the live Gateway connection is best effort; token and Redis cleanup determine whether revocation succeeds.
+DeviceService is the internal device-management service. It reads device rows written during login, checks Redis online state, and revokes devices by clearing token and connection state. A live device revocation succeeds only when Gateway connection closure is confirmed together with token, Redis and device-row cleanup.
 
 ## Data Model
 
@@ -56,14 +56,14 @@ nebula:user:devices:{user_id}
 ```text
 load user_devices row
 resolve Redis online keys
-if online: best-effort GatewayService.KickConnection(user_id, device_id, connection_id)
+if online: GatewayService.KickConnection(user_id, device_id, connection_id)
 DEL nebula:token:{token_hash}
 DEL online and connection keys
 SREM nebula:user:devices:{user_id} device_id
 clear user_devices.token_hash
 ```
 
-GatewayService validates that the target connection belongs to the same `user_id` and `device_id` before closing it. If a stale Redis mapping points to an unavailable gateway, DeviceService still clears the token hash and online keys and reports success when the device row is updated.
+GatewayService validates that the target connection belongs to the same `user_id` and `device_id` before closing it. If a stale Redis mapping points to an unavailable gateway, DeviceService still clears the token hash and online keys, but returns failure because live closure could not be confirmed.
 
 ## Run
 

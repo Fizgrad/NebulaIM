@@ -84,6 +84,7 @@ int main() {
     group.updated_at = now;
     uint64_t group_id = 0;
     assert(context.groupDao()->createGroup(group, &group_id));
+    assert(context.groupDao()->addMember(group_id, user2, 0));
 
     nebula::proto::SendGroupMessageRequest group_req;
     group_req.set_request_id("group");
@@ -96,6 +97,15 @@ int main() {
     assert(service.SendGroupMessage(&server_context, &group_req, &group_resp).ok());
     assert(group_resp.response().code() == 0);
     assert(context.messageDao()->getMessageById(group_resp.message_id()).has_value());
+    assert(context.groupDao()->removeMember(group_id, user2));
+
+    nebula::proto::AckMessageRequest departed_member_ack;
+    departed_member_ack.set_request_id("group-ack-after-leave");
+    departed_member_ack.set_user_id(user2);
+    departed_member_ack.set_message_id(group_resp.message_id());
+    nebula::proto::AckMessageResponse departed_member_ack_resp;
+    assert(service.AckMessage(&server_context, &departed_member_ack, &departed_member_ack_resp).ok());
+    assert(departed_member_ack_resp.response().code() == static_cast<int>(nebula::ErrorCode::OK));
 
     nebula::proto::SendGroupMessageRequest denied = group_req;
     denied.set_request_id("denied");

@@ -9,9 +9,9 @@ NebulaIM backend is a C++17/Linux distributed IM stack with native TCP and WebSo
 | TCP Gateway | PacketCodec framing over long-lived native TCP connections |
 | WebSocket Gateway | Browser WebSocket binary frames carry the same PacketCodec payloads |
 | Gateway RPC | Backend calls run through a bounded `RpcExecutor` to keep EventLoop threads non-blocking |
-| User auth | Register, login, validate token, logout, refresh token, and user profile lookup |
+| User auth | Register, login, validate token, refresh token, and user profile lookup |
 | Device management | List devices and kick one/all devices through token revocation, Redis cleanup, and Gateway connection close |
-| Friend relationship | Friend request send/list/accept/reject flow; direct AddFriend is disabled and returns `FRIEND_REQUEST_REQUIRED` |
+| Friend relationship | Friend request send/list/accept/reject flow and bidirectional friendship creation on acceptance |
 | Groups | Create, join, leave, member list, and group message delivery |
 | Message send | Single and group messages persist through MySQL, conversation updates, and outbox insertion in one transaction |
 | Kafka reliability | OutboxWorker retry/dead status and PushService manual offset commit |
@@ -26,7 +26,7 @@ NebulaIM backend is a C++17/Linux distributed IM stack with native TCP and WebSo
 | Service discovery | Static resolver abstraction for configured service addresses |
 | Admin operations | Scoped SHA-256 admin tokens, metadata auth, audit events, health, config validation, service overview, cleanup, online stats, outbox stats, and Kafka lag |
 | Health/readiness | Semantic dependency health checks and systemd readiness waits |
-| Browser SDK | `web_sdk/nebulaim.js` wraps binary WebSocket Packet + protobuf calls |
+| Browser protocol client | NebulaIM-Web `DirectGatewayClient` handles login, resume, heartbeat, pushed messages and ACK over binary WebSocket Packet + Protobuf |
 | E2E | `NEBULA_RUN_BACKEND_E2E=1 ./build/tests/test_backend_final_e2e` covers register/login/friend/message/outbox/push/ack/read/recall/conversation |
 
 ## Current Boundaries

@@ -9,11 +9,12 @@
 - Redis failed: check port 6379 and `redis-cli ping`.
 - Kafka failed: create topics with `scripts/init_topics.sh`, then check broker metadata with `scripts/health_check.sh`.
 - Gateway login failed: ensure UserService is running, Redis is reachable, and the client stays on the same authenticated socket.
-- Browser message failed: confirm the frontend sends WebSocket binary frames containing NebulaIM Packet + protobuf bytes, not JSON text frames. Use `web_sdk/nebulaim.js` as the reference.
+- Browser login, heartbeat or ACK failed: inspect the Bridge `/ws` proxy and the binary Packet + Protobuf handling in NebulaIM-Web `DirectGatewayClient`.
+- Browser message send failed: inspect the authenticated Bridge `POST /api/messages/single` or `/api/messages/group` response, MessageService logs, relationship/membership checks, and outbox state.
 - Message sent but no push: check `outbox_events` status, Kafka lag through AdminService or Kafka tools, PushService logs, Redis multi-device keys (`nebula:user:devices:*`, `online:{user}:{device}`, `conn:{user}:{device}`), and Gateway logs.
 - WebSocket client received unreadable push: verify Gateway is running the version that wraps `GatewayService.DeliverToConnection` output in a WebSocket binary frame for WebSocket connections.
-- Prometheus no data: verify metrics ports and scrape targets.
-- Grafana no data: verify datasource points to Prometheus.
+- Prometheus no data: verify service metrics listen on `127.0.0.1:9100..9107`, Prometheus uses host networking, and all targets are up.
+- Grafana no data: verify the provisioned datasource reaches `http://127.0.0.1:9090` and the checked-in dashboard is mounted.
 - Jaeger no traces: verify `trace.enabled=true`, `trace.otlp_endpoint=http://127.0.0.1:4318/v1/traces`, Jaeger container health, and service logs for `trace export failed`.
 - Gateway TLS failed: verify `gateway.tls.cert_path` and `gateway.tls.key_path`, then run `openssl s_client -connect 127.0.0.1:9000 -servername 127.0.0.1`.
 - Admin operation denied: verify the raw token is sent in gRPC metadata key `x-nebula-admin-token` and its configured scope matches the RPC.

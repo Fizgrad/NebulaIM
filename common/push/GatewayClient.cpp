@@ -6,9 +6,18 @@
 #include "common/rpc/RpcMetadata.h"
 #include "common/trace/TraceContext.h"
 
+#include <chrono>
 #include <grpcpp/grpcpp.h>
 
 namespace nebula {
+
+namespace {
+
+void setDeadline(grpc::ClientContext* context) {
+    context->set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(2));
+}
+
+}  // namespace
 
 GatewayClient::GatewayClient(const std::string& address)
     : GatewayClient(address, GrpcTlsConfig{}) {}
@@ -30,6 +39,7 @@ bool GatewayClient::deliverToConnection(const std::string& request_id, uint64_t 
     *req.mutable_message() = message;
     proto::DeliverToConnectionResponse resp;
     grpc::ClientContext ctx;
+    setDeadline(&ctx);
     RpcMetadata::injectTraceId(&ctx, TraceContext::ensureTraceId(request_id));
     InternalRpcAuth::instance().inject(&ctx);
     grpc::Status status = stub_->DeliverToConnection(&ctx, req, &resp);
@@ -51,6 +61,7 @@ bool GatewayClient::kickUser(const std::string& request_id, uint64_t user_id, co
     req.set_reason(reason);
     proto::KickUserResponse resp;
     grpc::ClientContext ctx;
+    setDeadline(&ctx);
     RpcMetadata::injectTraceId(&ctx, TraceContext::ensureTraceId(request_id));
     InternalRpcAuth::instance().inject(&ctx);
     grpc::Status status = stub_->KickUser(&ctx, req, &resp);
@@ -75,6 +86,7 @@ bool GatewayClient::kickConnection(const std::string& request_id,
     req.set_reason(reason);
     proto::KickConnectionResponse resp;
     grpc::ClientContext ctx;
+    setDeadline(&ctx);
     RpcMetadata::injectTraceId(&ctx, TraceContext::ensureTraceId(request_id));
     InternalRpcAuth::instance().inject(&ctx);
     grpc::Status status = stub_->KickConnection(&ctx, req, &resp);
@@ -92,6 +104,7 @@ bool GatewayClient::getOnlineStatus(const std::string& request_id, uint64_t user
     req.set_user_id(user_id);
     proto::GetOnlineStatusResponse resp;
     grpc::ClientContext ctx;
+    setDeadline(&ctx);
     RpcMetadata::injectTraceId(&ctx, TraceContext::ensureTraceId(request_id));
     InternalRpcAuth::instance().inject(&ctx);
     grpc::Status status = stub_->GetOnlineStatus(&ctx, req, &resp);

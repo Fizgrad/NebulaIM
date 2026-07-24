@@ -1,6 +1,6 @@
 # Security Design
 
-Passwords are hashed before storage. Token values live in Redis with TTL and can be explicitly deleted on logout. Redis token keys use `SHA-256(token)` rather than the raw bearer token. `RefreshToken` validates the old token, creates a new token, and invalidates the old token.
+Passwords are hashed before storage. Token values live in Redis with TTL and DeviceService deletes them during logout or device revocation. Redis token keys use `SHA-256(token)` rather than the raw bearer token. `RefreshToken` validates the old token, creates a new token, and invalidates the old token.
 
 Message size is bounded by protocol body length and message content length. WebSocket frame parsing validates mask rules, length encoding, opcodes, and rejects unsupported fragmentation. Browser clients must use binary frames containing NebulaIM Packet bytes; JSON/text frames are not accepted by Gateway.
 
@@ -59,6 +59,6 @@ or by terminating TLS at a load balancer/Nginx/Envoy and forwarding plaintext to
 
 `deploy/nginx/nebulaim.conf` includes a WebSocket Origin allowlist, per-IP connection limit, request rate limit, request ID forwarding, and header/body size limits. Replace the example domain/origin before exposing the service.
 
-`web_sdk/nebulaim.js` is the recommended browser boundary because it hides the Packet header and protobuf encoding details from UI code. Frontend code should persist one authenticated WebSocket per logged-in device and use numeric user IDs for message targets.
+NebulaIM-Web `DirectGatewayClient` is the browser protocol boundary for login, resume, heartbeat, pushed messages and ACK. It hides Packet framing and Protobuf encoding from UI code and keeps one authenticated WebSocket per logged-in device. Browser message commands use authenticated Bridge HTTP routes and numeric user or group IDs.
 
 Still not implemented: end-to-end encryption, full identity-provider backed RBAC, device trust management, and advanced abuse detection.

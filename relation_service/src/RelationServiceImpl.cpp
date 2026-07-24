@@ -63,15 +63,6 @@ bool invalidDeps(UserDao* user_dao, RelationDao* relation_dao, GroupDao* group_d
 RelationServiceImpl::RelationServiceImpl(UserDao* user_dao, RelationDao* relation_dao, GroupDao* group_dao, FriendRequestDao* friend_request_dao)
     : user_dao_(user_dao), relation_dao_(relation_dao), group_dao_(group_dao), friend_request_dao_(friend_request_dao) {}
 
-grpc::Status RelationServiceImpl::AddFriend(grpc::ServerContext* context, const proto::AddFriendRequest* request, proto::CommonResponse* response) {
-    LOG_INFO("AddFriend request_id=" + request->request_id() + " user_id=" + std::to_string(request->user_id()) + " friend_id=" + std::to_string(request->friend_id()));
-    if (!requireInternalRpc(context, request->request_id(), response)) return grpc::Status::OK;
-    if (request->user_id() == 0 || request->friend_id() == 0) { fillResponse(response, request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
-    if (request->user_id() == request->friend_id()) { fillResponse(response, request->request_id(), ErrorCode::CANNOT_ADD_SELF); return grpc::Status::OK; }
-    fillResponse(response, request->request_id(), ErrorCode::FRIEND_REQUEST_REQUIRED, "use SendFriendRequest and AcceptFriendRequest");
-    return grpc::Status::OK;
-}
-
 grpc::Status RelationServiceImpl::DeleteFriend(grpc::ServerContext* context, const proto::DeleteFriendRequest* request, proto::CommonResponse* response) {
     LOG_INFO("DeleteFriend request_id=" + request->request_id() + " user_id=" + std::to_string(request->user_id()) + " friend_id=" + std::to_string(request->friend_id()));
     if (!requireInternalRpc(context, request->request_id(), response)) return grpc::Status::OK;
@@ -100,7 +91,13 @@ grpc::Status RelationServiceImpl::ListFriends(grpc::ServerContext* context, cons
 grpc::Status RelationServiceImpl::SendFriendRequest(grpc::ServerContext* context, const proto::SendFriendRequestRequest* request, proto::SendFriendRequestResponse* response) {
     if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     if (invalidDeps(user_dao_, relation_dao_, group_dao_) || friend_request_dao_ == nullptr) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR); return grpc::Status::OK; }
-    if (request->from_user_id() == 0 || request->to_user_id() == 0 || request->from_user_id() == request->to_user_id()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT); return grpc::Status::OK; }
+    if (request->from_user_id() == 0 ||
+        request->to_user_id() == 0 ||
+        request->from_user_id() == request->to_user_id() ||
+        request->message().size() > 255) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT);
+        return grpc::Status::OK;
+    }
     if (!user_dao_->getUserById(request->from_user_id()).has_value() || !user_dao_->getUserById(request->to_user_id()).has_value()) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::USER_NOT_FOUND); return grpc::Status::OK; }
     if (relation_dao_->isFriend(request->from_user_id(), request->to_user_id())) { fillResponse(response->mutable_response(), request->request_id(), ErrorCode::FRIEND_ALREADY_EXISTS); return grpc::Status::OK; }
 
@@ -108,7 +105,7 @@ grpc::Status RelationServiceImpl::SendFriendRequest(grpc::ServerContext* context
     FriendRequest item;
     item.from_user_id = request->from_user_id();
     item.to_user_id = request->to_user_id();
-    item.message = request->message().substr(0, 255);
+    item.message = request->message();
     item.status = static_cast<int>(FriendRequestStatus::PENDING);
     item.created_at = now;
     item.updated_at = now;
@@ -253,6 +250,7 @@ grpc::Status RelationServiceImpl::ListGroups(grpc::ServerContext* context,
         return grpc::Status::OK;
     }
     size_t limit = request->limit() == 0 ? 100 : request->limit();
+    if (limit > 200) limit = 200;
     for (const auto& group : group_dao_->listGroupsForUser(request->user_id(), limit)) {
         fillGroup(response->add_groups(), group);
     }
@@ -269,6 +267,7 @@ grpc::Status RelationServiceImpl::SearchGroups(grpc::ServerContext* context,
         return grpc::Status::OK;
     }
     size_t limit = request->limit() == 0 ? 12 : request->limit();
+    if (limit > 50) limit = 50;
     for (const auto& group : group_dao_->searchGroups(request->query(), limit)) {
         fillGroup(response->add_groups(), group);
     }

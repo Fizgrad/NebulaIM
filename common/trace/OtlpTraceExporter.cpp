@@ -57,7 +57,7 @@ bool OtlpTraceExporter::exportSpans(const std::vector<CompletedSpan>& spans, std
     const std::string bytes = request.str();
     size_t written = 0;
     while (written < bytes.size()) {
-        ssize_t n = ::write(fd, bytes.data() + written, bytes.size() - written);
+        ssize_t n = ::send(fd, bytes.data() + written, bytes.size() - written, MSG_NOSIGNAL);
         if (n < 0 && errno == EINTR) continue;
         if (n <= 0) {
             if (error != nullptr) *error = std::string("failed to write OTLP request: ") + std::strerror(errno);

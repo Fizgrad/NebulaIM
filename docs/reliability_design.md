@@ -4,7 +4,7 @@ NebulaIM uses these reliability primitives:
 
 - Rate limiting: token bucket implementation for login, message, and per-connection packet controls. Gateway loads `rate_limit.*` from config and applies packet limits after decoding each Packet, so multiple packets in one TCP read or WebSocket frame are still counted individually.
 - Circuit breaker: CLOSED, OPEN, HALF_OPEN states with failure threshold and open timeout.
-- Async Gateway RPC: Gateway EventLoop no longer needs to block on synchronous backend stubs when RpcExecutor is enabled; the executor has a configurable max queue and returns `SERVICE_UNAVAILABLE` when saturated.
+- Async Gateway RPC: Gateway EventLoop delegates backend calls to RpcExecutor; the executor has a configurable max queue and returns `SERVICE_UNAVAILABLE` when saturated.
 - Outbox retry: Kafka publication is retried from MySQL outbox state.
 - DLQ/dead status: exhausted events are marked dead and can be emitted to the DLQ topic.
 - Kafka consumer acknowledgement: PushService disables auto commit and commits offsets only after online delivery, retry enqueue, DLQ/offline persistence, or final handled outcome succeeds.
@@ -14,7 +14,7 @@ NebulaIM uses these reliability primitives:
 - Service discovery: service clients depend on a resolver abstraction; the current implementation is static config based.
 - Redis client safety: `RedisClient` protects a single hiredis connection with a mutex so multi-Reactor Gateway callbacks cannot interleave commands on the same connection.
 - Admin health and cleanup: AdminService exposes token-protected HealthCheck, bounded RunCleanup, stale Redis online-device cleanup, online/connection stats, outbox status stats, Kafka lag queries, config validation, service overview, and recent audit events.
-- Device revocation: DeviceService clears the device token hash, deletes Redis online/connection keys, removes stale device-set membership, and asks GatewayService to close the exact connection when it is still online.
+- Device revocation: DeviceService clears the device token hash, deletes Redis online/connection keys, removes device-set membership, and requires GatewayService confirmation when closing an online connection.
 - gRPC TLS: service listeners and internal clients can use TLS/mTLS credentials from config while local development remains plaintext.
 - Internal RPC auth: optional `x-nebula-internal-token` metadata blocks direct unauthenticated service calls when enabled.
 - Gateway native TLS: the TCP/WebSocket listener can terminate TLS directly through `gateway.tls.*`, while Nginx/Envoy edge termination remains supported.

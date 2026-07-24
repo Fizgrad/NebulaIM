@@ -16,7 +16,7 @@ Compared with HTTP JSON, Protobuf is smaller, faster to parse, strongly typed, a
 ```text
 gateway
   | gRPC
-  +--> user_service         : Register/Login/ValidateToken/Logout/RefreshToken/GetUserInfo/GetUserByUsername
+  +--> user_service         : Register/Login/ValidateToken/RefreshToken/GetUserInfo/GetUserByUsername
   +--> message_service      : Send/Ack/PullOffline/Read/Recall
   +--> relation_service     : Friend requests, friendships, groups
   +--> conversation_service : Conversation list and conversation flags

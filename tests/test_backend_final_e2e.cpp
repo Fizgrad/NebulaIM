@@ -138,7 +138,7 @@ public:
             "Host: 127.0.0.1\r\n"
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"  // gitleaks:allow RFC 6455 example nonce
             "Sec-WebSocket-Version: 13\r\n"
             "Origin: http://127.0.0.1\r\n\r\n";
         if (!writeAll(fd_, request)) return false;

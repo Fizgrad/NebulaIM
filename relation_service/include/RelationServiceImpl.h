@@ -13,9 +13,6 @@ class RelationServiceImpl final : public proto::RelationService::Service {
 public:
     RelationServiceImpl(UserDao* user_dao, RelationDao* relation_dao, GroupDao* group_dao, FriendRequestDao* friend_request_dao = nullptr);
 
-    grpc::Status AddFriend(grpc::ServerContext* context,
-                           const proto::AddFriendRequest* request,
-                           proto::CommonResponse* response) override;
     grpc::Status DeleteFriend(grpc::ServerContext* context,
                               const proto::DeleteFriendRequest* request,
                               proto::CommonResponse* response) override;

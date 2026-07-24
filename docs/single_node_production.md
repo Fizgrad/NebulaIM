@@ -47,7 +47,7 @@ NEBULA_ENV=production ./scripts/migrate_db.sh /etc/nebulaim/nebula.conf
 ./scripts/init_topics.sh
 ```
 
-`deploy/docker-compose.prod.yml` binds middleware ports to loopback and requires non-empty passwords through environment variables. In production mode the migration script takes a pre-migration backup and acquires a MySQL named lock before applying versioned SQL.
+`deploy/docker-compose.prod.yml` binds middleware ports to loopback and requires non-empty passwords through environment variables. Prometheus and Grafana use host networking to scrape `127.0.0.1:9100..9107` and reach `127.0.0.1:9090` respectively; both web UIs still bind only to loopback. Compose limits Prometheus to 256 MiB, Grafana to 192 MiB, and Jaeger to 384 MiB. In production mode the migration script takes a pre-migration backup and acquires a MySQL named lock before applying versioned SQL.
 
 ## Config
 

@@ -28,14 +28,6 @@ RejectFriendRequest -> rejected
 ListFriendRequests -> incoming/outgoing request views
 ```
 
-Direct AddFriend is not a production friendship write path:
-
-```text
-AddFriend -> FRIEND_REQUEST_REQUIRED
-```
-
-Direct AddFriend no longer creates friendship rows in the production path. The RPC remains in the current proto surface but is disabled by policy; callers must use `SendFriendRequest` and `AcceptFriendRequest` to create friendships.
-
 DeleteFriend checks relation existence and marks both rows inactive in one transaction.
 
 ListFriends reads friend IDs and then queries UserDao for public UserInfo. This is currently N+1 and can later be optimized with `batchGetUsersByIds`.
@@ -79,17 +71,16 @@ ListGroupMembers reads member IDs and returns public UserInfo.
 
 1. Friend relation can be stored as one bidirectional logical edge or two directional rows.
 2. Two-row design makes listFriends simple but needs transaction consistency.
-3. Direct AddFriend is rejected with `FRIEND_REQUEST_REQUIRED`; the public write path is request approval.
-4. `user_id + friend_id` unique index still prevents duplicate friendship rows after request acceptance.
-5. DeleteFriend updates both directional rows.
-6. Groups and group_members are separate for normalization and scalable membership.
-7. Friend request unique indexes prevent duplicate pending requests.
-8. `group_id + user_id` unique index prevents duplicate joins.
-9. Owner leave can transfer ownership, dissolve group, or be forbidden; this implementation forbids it.
-10. N+1 means each friend/member causes one user query.
-11. batchGetUsersByIds can query all user rows with `WHERE id IN (...)`.
-12. RelationService currently reads user table directly; in stricter microservices it could call UserService.
-13. Cross-service consistency can use local transactions, events, or sagas.
-14. SendFriendRequest is intentionally separate from friendship creation so audit/moderation can be added later.
-15. JoinGroup can be idempotent, but this implementation returns `GROUP_ALREADY_JOINED`.
-16. A fuller production friend system could add block lists and moderation/audit states.
+3. `user_id + friend_id` unique index prevents duplicate friendship rows after request acceptance.
+4. DeleteFriend updates both directional rows.
+5. Groups and group_members are separate for normalization and scalable membership.
+6. Friend request unique indexes prevent duplicate pending requests.
+7. `group_id + user_id` unique index prevents duplicate joins.
+8. Owner leave can transfer ownership, dissolve group, or be forbidden; this implementation forbids it.
+9. N+1 means each friend/member causes one user query.
+10. batchGetUsersByIds can query all user rows with `WHERE id IN (...)`.
+11. RelationService currently reads user table directly; in stricter microservices it could call UserService.
+12. Cross-service consistency can use local transactions, events, or sagas.
+13. SendFriendRequest is intentionally separate from friendship creation so audit/moderation can be added later.
+14. JoinGroup returns `GROUP_ALREADY_JOINED` when membership already exists.
+15. A fuller friend system could add block lists and moderation/audit states.

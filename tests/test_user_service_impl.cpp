@@ -15,6 +15,15 @@ int main() {
     nebula::UserServiceImpl service(context.userDao(), context.deviceDao(), context.redisClient(), context.tokenManager(), context.passwordMinLength());
     grpc::ServerContext server_context;
 
+    nebula::proto::RegisterRequest oversized_register_req;
+    oversized_register_req.set_request_id("register-oversized");
+    oversized_register_req.set_username(std::string(65, 'u'));
+    oversized_register_req.set_password("password123");
+    oversized_register_req.set_nickname("Oversized");
+    nebula::proto::RegisterResponse oversized_register_resp;
+    assert(service.Register(&server_context, &oversized_register_req, &oversized_register_resp).ok());
+    assert(oversized_register_resp.response().code() == static_cast<int>(nebula::ErrorCode::INVALID_ARGUMENT));
+
     std::string username = "svc_user_" + std::to_string(nebula::TimeUtil::nowMs());
     nebula::proto::RegisterRequest register_req;
     register_req.set_request_id("register-1");
@@ -109,6 +118,13 @@ int main() {
     nebula::proto::LoginResponse bad_login_resp;
     assert(service.Login(&server_context, &bad_login_req, &bad_login_resp).ok());
     assert(bad_login_resp.response().code() == static_cast<int>(nebula::ErrorCode::AUTH_FAILED));
+
+    nebula::proto::LoginRequest oversized_login_req = login_req;
+    oversized_login_req.set_request_id("oversized-login");
+    oversized_login_req.set_password(std::string(257, 'p'));
+    nebula::proto::LoginResponse oversized_login_resp;
+    assert(service.Login(&server_context, &oversized_login_req, &oversized_login_resp).ok());
+    assert(oversized_login_resp.response().code() == static_cast<int>(nebula::ErrorCode::INVALID_ARGUMENT));
 
     nebula::proto::ValidateTokenRequest bad_token_req;
     bad_token_req.set_request_id("bad-token");

@@ -11,9 +11,19 @@
 #include "common/rpc/InternalRpcAuth.h"
 #include "common/utils/TimeUtil.h"
 
+#include <cstddef>
+
 namespace nebula {
 
 namespace {
+
+constexpr size_t kMaxUsernameLength = 64;
+constexpr size_t kMaxPasswordLength = 256;
+constexpr size_t kMaxNicknameLength = 64;
+constexpr size_t kMaxDeviceIdLength = 128;
+constexpr size_t kMaxPlatformLength = 32;
+constexpr size_t kMaxDeviceNameLength = 128;
+constexpr size_t kMaxTokenLength = 256;
 
 void fillResponse(proto::CommonResponse* response, const std::string& request_id, ErrorCode code, const std::string& message = "") {
     response->set_code(static_cast<int32_t>(code));
@@ -70,6 +80,12 @@ grpc::Status UserServiceImpl::Register(grpc::ServerContext* context,
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::PASSWORD_TOO_SHORT);
         return grpc::Status::OK;
     }
+    if (request->username().size() > kMaxUsernameLength ||
+        request->password().size() > kMaxPasswordLength ||
+        request->nickname().size() > kMaxNicknameLength) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT, "registration field exceeds size limit");
+        return grpc::Status::OK;
+    }
     if (user_dao_->getUserByUsername(request->username()).has_value()) {
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::USER_ALREADY_EXISTS);
         return grpc::Status::OK;
@@ -121,6 +137,14 @@ grpc::Status UserServiceImpl::Login(grpc::ServerContext* context,
     }
     if (request->password().empty()) {
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::PASSWORD_EMPTY);
+        return grpc::Status::OK;
+    }
+    if (request->username().size() > kMaxUsernameLength ||
+        request->password().size() > kMaxPasswordLength ||
+        request->device_id().size() > kMaxDeviceIdLength ||
+        request->platform().size() > kMaxPlatformLength ||
+        request->device_name().size() > kMaxDeviceNameLength) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT, "login field exceeds size limit");
         return grpc::Status::OK;
     }
 
@@ -181,7 +205,7 @@ grpc::Status UserServiceImpl::ValidateToken(grpc::ServerContext* context,
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR);
         return grpc::Status::OK;
     }
-    if (request->token().empty()) {
+    if (request->token().empty() || request->token().size() > kMaxTokenLength) {
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::TOKEN_INVALID);
         response->set_valid(false);
         return grpc::Status::OK;
@@ -248,6 +272,10 @@ grpc::Status UserServiceImpl::GetUserByUsername(grpc::ServerContext* context,
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::USERNAME_EMPTY);
         return grpc::Status::OK;
     }
+    if (request->username().size() > kMaxUsernameLength) {
+        fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INVALID_ARGUMENT, "username exceeds size limit");
+        return grpc::Status::OK;
+    }
 
     auto user = user_dao_->getUserByUsername(request->username());
     if (!user.has_value()) {
@@ -260,39 +288,15 @@ grpc::Status UserServiceImpl::GetUserByUsername(grpc::ServerContext* context,
     return grpc::Status::OK;
 }
 
-grpc::Status UserServiceImpl::Logout(grpc::ServerContext* context, const proto::LogoutRequest* request, proto::CommonResponse* response) {
-    if (!requireInternalRpc(context, request->request_id(), response)) return grpc::Status::OK;
-    if (redis_client_ == nullptr || token_manager_ == nullptr) {
-        fillResponse(response, request->request_id(), ErrorCode::INTERNAL_ERROR);
-        return grpc::Status::OK;
-    }
-    if (request->token().empty()) {
-        fillResponse(response, request->request_id(), ErrorCode::TOKEN_INVALID);
-        return grpc::Status::OK;
-    }
-    bool ok = redis_client_->del(token_manager_->tokenKey(request->token()));
-    if (!ok) {
-        fillResponse(response, request->request_id(), ErrorCode::LOGOUT_FAILED);
-        return grpc::Status::OK;
-    }
-    if (device_dao_ != nullptr && request->user_id() != 0 && !request->device_id().empty()) {
-        auto device = device_dao_->getDevice(request->user_id(), request->device_id());
-        std::string token_hash = TokenManager::tokenHash(request->token());
-        if (device.has_value() && device->token_hash == token_hash) {
-            device_dao_->clearDeviceToken(request->user_id(), request->device_id(), TimeUtil::nowMs());
-        }
-    }
-    fillResponse(response, request->request_id(), ErrorCode::OK, "OK");
-    return grpc::Status::OK;
-}
-
 grpc::Status UserServiceImpl::RefreshToken(grpc::ServerContext* context, const proto::RefreshTokenRequest* request, proto::RefreshTokenResponse* response) {
     if (!requireInternalRpc(context, request->request_id(), response->mutable_response())) return grpc::Status::OK;
     if (redis_client_ == nullptr || token_manager_ == nullptr) {
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::INTERNAL_ERROR);
         return grpc::Status::OK;
     }
-    if (request->token().empty()) {
+    if (request->token().empty() ||
+        request->token().size() > kMaxTokenLength ||
+        request->device_id().size() > kMaxDeviceIdLength) {
         fillResponse(response->mutable_response(), request->request_id(), ErrorCode::TOKEN_INVALID);
         return grpc::Status::OK;
     }

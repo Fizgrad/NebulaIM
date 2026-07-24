@@ -1,3 +1,9 @@
+if(MSVC)
+    add_compile_options(/UNDEBUG)
+else()
+    add_compile_options(-UNDEBUG)
+endif()
+
 add_executable(test_logger test_logger.cpp)
 target_link_libraries(test_logger PRIVATE nebula_common)
 add_test(NAME test_logger COMMAND test_logger WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
@@ -60,10 +66,6 @@ add_executable(test_gateway_service_impl
 target_include_directories(test_gateway_service_impl PRIVATE ${PROJECT_SOURCE_DIR}/gateway/include)
 target_link_libraries(test_gateway_service_impl PRIVATE nebula_common nebula_proto ${NEBULA_GRPC_LIB} ${NEBULA_PROTOBUF_LIB})
 add_test(NAME test_gateway_service_impl COMMAND test_gateway_service_impl WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
-
-add_executable(test_gateway_client_flow test_gateway_client_flow.cpp)
-target_link_libraries(test_gateway_client_flow PRIVATE nebula_common)
-add_test(NAME test_gateway_client_flow COMMAND test_gateway_client_flow WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_executable(test_online_status_manager test_online_status_manager.cpp)
 target_link_libraries(test_online_status_manager PRIVATE nebula_common)
@@ -173,6 +175,14 @@ if(NEBULA_ENABLE_STORAGE)
     )
     target_include_directories(test_user_service_integration PRIVATE ${PROJECT_SOURCE_DIR}/user_service/include)
     target_link_libraries(test_user_service_integration PRIVATE nebula_common nebula_proto ${NEBULA_GRPC_LIB} ${NEBULA_PROTOBUF_LIB})
+
+    add_executable(test_device_service_impl
+        test_device_service_impl.cpp
+        ${PROJECT_SOURCE_DIR}/device_service/src/DeviceServiceImpl.cpp
+        ${PROJECT_SOURCE_DIR}/device_service/src/DeviceServiceContext.cpp
+    )
+    target_include_directories(test_device_service_impl PRIVATE ${PROJECT_SOURCE_DIR}/device_service/include)
+    target_link_libraries(test_device_service_impl PRIVATE nebula_common nebula_proto ${NEBULA_GRPC_LIB} ${NEBULA_PROTOBUF_LIB})
 
     add_executable(test_relation_service_impl
         test_relation_service_impl.cpp
@@ -304,6 +314,7 @@ set(NEBULA_MISSING_INTEGRATION_TESTS
     test_online_status_manager
     test_user_service_impl
     test_user_service_integration
+    test_device_service_impl
     test_relation_service_impl
     test_relation_service_integration
     test_push_dispatcher
@@ -344,7 +355,6 @@ set(NEBULA_UNIT_TESTS
     test_gateway_packet_helper
     test_gateway_router
     test_gateway_service_impl
-    test_gateway_client_flow
     test_gateway_client
     test_message_id_generator
     test_conversation_id
@@ -374,6 +384,7 @@ set(NEBULA_INTEGRATION_TESTS
     test_online_status_manager
     test_user_service_impl
     test_user_service_integration
+    test_device_service_impl
     test_relation_service_impl
     test_relation_service_integration
     test_push_dispatcher

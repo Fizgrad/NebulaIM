@@ -37,10 +37,6 @@ public:
                                    const proto::GetUserByUsernameRequest* request,
                                    proto::GetUserInfoResponse* response) override;
 
-    grpc::Status Logout(grpc::ServerContext* context,
-                        const proto::LogoutRequest* request,
-                        proto::CommonResponse* response) override;
-
     grpc::Status RefreshToken(grpc::ServerContext* context,
                               const proto::RefreshTokenRequest* request,
                               proto::RefreshTokenResponse* response) override;
